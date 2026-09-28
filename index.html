@@ -496,6 +496,9 @@
               <span class="text-slate-800">스마트 시뮬레이션 (오프라인)</span>
             </label>
           </div>
+          <label class="block font-bold text-slate-700 mt-3 mb-1">Gemini API 키</label>
+          <input id="geminiApiKeyInput" type="password" autocomplete="off" placeholder="AIza... (이 기기에만 저장됩니다)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 outline-none" style="user-select: text; -webkit-user-select: text;">
+          <p id="geminiApiKeyStatus" class="text-[11px] text-slate-500 mt-1">Google AI Studio(aistudio.google.com)에서 발급한 키를 입력하세요.</p>
         </div>
       </div>
 
@@ -996,6 +999,7 @@
       }
       
       const base64Data = canvas.toDataURL("image/png").split(",")[1];
+      let aiFailed = false;
 
       try {
         if (gameState.apiMode === "gemini") {
@@ -1006,10 +1010,15 @@
       } catch (err) {
         console.warn("Vision API 이슈로 스마트 시뮬레이션으로 자동 대체:", err);
         simulateVisionAi();
+        aiFailed = true;
+        if (scanIndicator) {
+          const msg = err.message === "NO_API_KEY" ? "API 키 없음 · 시뮬레이션" : "API 오류 · 시뮬레이션";
+          scanIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> ${msg}`;
+        }
       } finally {
         setTimeout(() => {
           if (scanLine) scanLine.classList.add("hidden");
-          if (gameState.status === "playing" && scanIndicator) {
+          if (!aiFailed && gameState.status === "playing" && scanIndicator) {
             scanIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> 수신 대기`;
           }
         }, 700);
@@ -1025,9 +1034,24 @@
       });
     }
 
+    // API 키는 저장소에 넣지 않고, 부스 기기의 브라우저(localStorage)에만 저장합니다.
+    const API_KEY_STORAGE = "sketchTelepathy.geminiApiKey";
+    const GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3-flash-preview"];
+
+    function loadApiKey() {
+      try { return localStorage.getItem(API_KEY_STORAGE) || ""; } catch (e) { return ""; }
+    }
+
+    function saveApiKey(key) {
+      try {
+        if (key) localStorage.setItem(API_KEY_STORAGE, key);
+        else localStorage.removeItem(API_KEY_STORAGE);
+      } catch (e) {}
+    }
+
     async function callGeminiVision(base64ImageData) {
-      const apiKey = "";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+      const apiKey = loadApiKey();
+      if (!apiKey) throw new Error("NO_API_KEY");
 
       const systemInstruction = `당신은 AI 페스타 부스에서 Google 'Quick, Draw!'와 유사하게 사용자의 간단한 손그림 낙서/스케치를 실시간으로 판독하는 스케치 분류 AI입니다.
 반드시 아래 JSON 형식으로만 응답해야 합니다:
@@ -1064,11 +1088,16 @@
         }
       };
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      let response;
+      for (const model of GEMINI_MODELS) {
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify(payload)
+        });
+        // 모델이 없거나 폐기된 경우(404)에만 다음 모델로 재시도
+        if (response.status !== 404) break;
+      }
 
       if (!response.ok) throw new Error(`API error: ${response.status}`);
 
@@ -1401,7 +1430,10 @@
       saveSettingsBtn.addEventListener("click", () => {
         const modeRadio = document.querySelector('input[name="apiMode"]:checked');
         if (modeRadio) gameState.apiMode = modeRadio.value;
-        
+
+        const keyInput = document.getElementById("geminiApiKeyInput");
+        if (keyInput) saveApiKey(keyInput.value.trim());
+
         const totalRoundsVal = parseInt(document.getElementById("totalRoundsSelect")?.value, 10);
         const passTargetVal = parseInt(document.getElementById("passTargetSelect")?.value, 10);
         if (totalRoundsVal) gameState.totalRounds = totalRoundsVal;
@@ -1414,6 +1446,8 @@
 
     window.addEventListener("DOMContentLoaded", () => {
       resizeCanvas();
+      const keyInput = document.getElementById("geminiApiKeyInput");
+      if (keyInput) keyInput.value = loadApiKey();
       renderRoundSlots();
       pickRandomWord();
       updateScoreBanner();
