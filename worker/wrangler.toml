@@ -1,0 +1,8 @@
+name = "sketch-telepathy-ai"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://bbannggji1220-bot.github.io,http://localhost:8765"
+
+# GEMINI_API_KEY 는 코드에 넣지 않고 `npx wrangler secret put GEMINI_API_KEY` 로 등록합니다.
