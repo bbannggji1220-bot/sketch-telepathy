@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>스케치 텔레파시 - AI 페스타 부스</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome CDN for game & interface icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts for Friendly Korean Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* 태블릿/모바일 터치 스크롤 방지 및 부드러운 드로잉 */
+    canvas {
+      touch-action: none;
+      cursor: crosshair;
+    }
+    @keyframes scan-line {
+      0% { top: 0%; opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { top: 100%; opacity: 0.2; }
+    }
+    .animate-scan {
+      animation: scan-line 1.6s infinite linear;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-slate-100 via-indigo-50/40 to-sky-100 text-slate-800 min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+
+  <!-- 상단 네비게이션 헤더 (밝은 테마) -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-indigo-100 sticky top-0 z-30 px-4 py-2 shadow-sm shrink-0">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-3">
+      <!-- 부스 로고 및 타이틀 -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-md shadow-indigo-300">
+          <i class="fa-solid fa-wand-magic-sparkles text-white text-base"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">AI FESTA 부스</span>
+            <span class="text-[11px] text-slate-500 font-medium hidden sm:inline">스케치 텔레파시 존</span>
+          </div>
+          <h1 class="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-1">
+            스케치 텔레파시 <span class="text-[10px] font-semibold text-pink-600 bg-pink-50 px-1 py-0.5 rounded border border-pink-200">Vision AI</span>
+          </h1>
+        </div>
+      </div>
+
+      <!-- 상단 컨트롤 (게임 방법, 음성 토글, 부스 설정) -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button id="showHowToBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition border border-amber-200 shadow-xs" title="게임 진행 방법 안내">
+          <i class="fa-solid fa-circle-question text-amber-500"></i>
+          <span class="hidden sm:inline">게임 방법</span>
+        </button>
+
+        <button id="ttsToggleBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition border border-slate-200 shadow-xs" title="AI 음성 토글">
+          <i id="ttsIcon" class="fa-solid fa-volume-high text-indigo-600"></i>
+          <span class="hidden md:inline" id="ttsLabel">AI 음성 ON</span>
+        </button>
+
+        <button id="aiConceptBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition border border-indigo-200">
+          <i class="fa-solid fa-brain"></i>
+          <span class="hidden sm:inline">원리 알아보기</span>
+        </button>
+
+        <button id="boothSettingsBtn" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition border border-slate-200" title="부스 운영자 설정">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-6xl w-full mx-auto px-3 sm:px-4 pt-2 shrink-0">
+    <div class="bg-white/95 border border-indigo-100 rounded-2xl px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 border border-amber-300 flex items-center justify-center font-black text-xs shadow-xs">
+          <i class="fa-solid fa-medal"></i>
+        </div>
+        <div class="text-xs">
+          <span class="font-extrabold text-slate-800">부스 공식 미션:</span>
+          <span class="text-slate-600">5문제 중 <strong class="text-emerald-600 font-extrabold">4문제 이상</strong> 맞추면 스탬프 획득!</span>
+          <span class="text-slate-400 mx-1 hidden sm:inline">|</span>
+          <span class="text-[11px] text-slate-500">
+            현재: <span id="currentScoreText" class="text-indigo-600 font-bold">0 / 5 성공</span> (남은 기회: <span id="remainingRoundsText" class="text-slate-800 font-bold">5회</span>)
+          </span>
+        </div>
+      </div>
+
+      <!-- 라운드 슬롯 인디케이터 배지들 -->
+      <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200">
+        <span class="text-[10px] font-bold text-slate-500 mr-0.5 hidden sm:inline">라운드:</span>
+        <div id="roundSlotsContainer" class="flex items-center gap-1.5">
+          <!-- 라운드 1~5 동적 렌더링 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="max-w-6xl w-full mx-auto px-3 sm:px-4 py-2 flex-1 flex flex-col gap-2 min-h-0">
+    
+    <!-- 상단: AI가 실시간으로 예측하고 있는 단어들 & 시간/상태 바 -->
+    <div class="bg-white/95 rounded-2xl p-2.5 sm:p-3 border border-indigo-100 shadow-sm shrink-0 flex flex-col gap-2">
+      
+      <!-- 상단 1열: 라운드 정보, 15초 프로그레스 타이머 -->
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="currentRoundBadge" class="text-xs font-black px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-xs">
+            ROUND 1 / 5
+          </span>
+          <div class="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+            <span class="text-slate-400">제시어:</span>
+            <span id="currentMissionWordReminder" class="text-indigo-700 font-extrabold">-</span>
+          </div>
+        </div>
+
+        <!-- 남은 시간 프로그레스 바 -->
+        <div class="flex-1 max-w-md flex items-center gap-2">
+          <div class="flex items-center gap-1 text-xs font-extrabold text-amber-600 min-w-[55px]">
+            <i class="fa-solid fa-stopwatch text-sm"></i>
+            <span id="timeLeftLabel">15.0s</span>
+          </div>
+          <div class="flex-1 bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+            <div id="timeProgressBar" class="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500 rounded-full w-full transition-all duration-100 ease-linear"></div>
+          </div>
+          <span id="scanStatusIndicator" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">
+            대기 중
+          </span>
+        </div>
+      </div>
+
+      <!-- 상단 2열: AI 발화 & 실시간 예측 Top 3 후보 단어들 -->
+      <div class="flex flex-col md:flex-row items-center justify-between gap-2 pt-1 border-t border-slate-100">
+        <!-- AI 실시간 발화 말풍선 -->
+        <div class="w-full md:w-auto flex-1 flex items-center gap-2 bg-indigo-50/60 rounded-xl px-2.5 py-1.5 border border-indigo-100 text-xs">
+          <div class="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px] shrink-0">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <p id="aiSpeechBubble" class="text-slate-700 font-medium truncate">
+            "스케치를 시작하면 3초마다 선을 인식해 추측을 말합니다!"
+          </p>
+        </div>
+
+        <!-- AI 실시간 예측 단어 칩 (Top 3) -->
+        <div class="w-full md:w-auto flex items-center gap-2 justify-end shrink-0">
+          <span class="text-[11px] font-bold text-slate-500 shrink-0 hidden sm:inline">AI 실시간 추측:</span>
+          <div id="predictionsList" class="flex items-center gap-1.5 flex-1 md:flex-initial">
+            <!-- 1등, 2등, 3등 단어 칩 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 flex flex-col bg-white/95 rounded-2xl p-2.5 sm:p-3 border border-indigo-100 shadow-sm relative min-h-0">
+      
+      <!-- 캔버스 조작 툴바: 펜, 지우개, 굵기 조절, 전체 지우기, 즉시 판독 -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 shrink-0">
+        <div class="flex items-center gap-1.5">
+          <button id="penToolBtn" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-pen"></i><span>펜</span>
+          </button>
+          <button id="eraserToolBtn" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition border border-slate-200">
+            <i class="fa-solid fa-eraser"></i><span>지우개</span>
+          </button>
+          
+          <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
+
+          <!-- 선 굵기 조절 -->
+          <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button data-size="5" class="size-btn w-6 h-6 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-center transition" title="얇은 선">
+              <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+            </button>
+            <button data-size="9" class="size-btn w-6 h-6 rounded-lg text-[10px] font-bold bg-white text-indigo-700 shadow-xs border border-indigo-200 flex items-center justify-center transition" title="중간 선">
+              <span class="w-2.5 h-2.5 rounded-full bg-current"></span>
+            </button>
+            <button data-size="16" class="size-btn w-6 h-6 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-center transition" title="굵은 선">
+              <span class="w-3.5 h-3.5 rounded-full bg-current"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="clearCanvasBtn" class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-trash-can"></i><span>전체 지우기</span>
+          </button>
+          <button id="manualPredictBtn" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-sparkles"></i><span>지금 판독</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 그리는 칸 (캔버스 영역) -->
+      <div id="canvasWrapper" class="relative flex-1 w-full bg-white rounded-xl overflow-hidden mt-2 border border-slate-200 shadow-inner touch-none min-h-[300px]">
+        <canvas id="sketchCanvas" class="w-full h-full block bg-white"></canvas>
+        
+        <!-- AI 분석 시 스캔 레이저 라인 -->
+        <div id="scanLine" class="hidden pointer-events-none absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent shadow-[0_0_15px_#06b6d4] z-10 animate-scan"></div>
+      </div>
+
+      <!-- 캔버스 하단 안내 텍스트 -->
+      <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 px-1 shrink-0">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-solid fa-hand-pointer text-indigo-500"></i>
+          <span>태블릿 터치펜 및 손가락 드로잉 지원</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="strokeCountText">선 획수: 0개</span>
+          <span>•</span>
+          <span class="text-indigo-600 font-semibold">3초 주기 특징(Feature) 자동 판독</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- [요청 반영] 1라운드 시작 시 5초 동안 제시어를 안내하는 카운트다운 화면 -->
+  <div id="wordPreviewModal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-indigo-100 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-center overflow-hidden animate-in fade-in zoom-in duration-200">
+      
+      <!-- 상단 배경 글로우 -->
+      <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-48 bg-gradient-to-tr from-indigo-300 to-pink-300 rounded-full blur-3xl opacity-30 pointer-events-none"></div>
+
+      <!-- 라운드 배지 -->
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-black mb-3">
+        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+        <span id="previewRoundBadge">1 ROUND 제시어</span>
+      </div>
+
+      <div class="text-xs font-semibold text-slate-500 mb-1">AI에게 텔레파시를 보낼 단어는?</div>
+      
+      <!-- 제시 단어 대형 표시 -->
+      <div class="py-2 flex items-center justify-center gap-3">
+        <h2 id="previewWordText" class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600 tracking-tight">
+          고양이
+        </h2>
+        <span id="previewCategoryBadge" class="text-xs font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+          동물
+        </span>
+      </div>
+
+      <!-- 그리기 힌트 -->
+      <p id="previewHintText" class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200 my-4 leading-relaxed">
+        💡 팁: 뾰족한 귀와 수염 등 <strong>핵심 외곽선</strong> 위주로 빠르게 그려보세요!
+      </p>
+
+      <!-- 5초 프로그레스 바 및 카운트다운 타이머 -->
+      <div class="space-y-2 mb-5">
+        <div class="flex items-center justify-between text-xs font-extrabold">
+          <span class="text-slate-500">그리기 시작까지</span>
+          <span id="previewCountdownNumber" class="text-xl font-black text-indigo-600 font-mono">5초</span>
+        </div>
+        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+          <div id="previewProgressBar" class="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full w-full transition-all duration-100 ease-linear"></div>
+        </div>
+      </div>
+
+      <!-- 즉시 시작(스킵) 버튼 -->
+      <button id="skipPreviewBtn" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-md shadow-indigo-300 transition flex items-center justify-center gap-2">
+        <span>기다리지 않고 바로 그리기</span>
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+
+    </div>
+  </div>
+
+  <div id="introModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-indigo-100 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative text-center overflow-hidden animate-in fade-in zoom-in duration-200">
+      
+      <div class="w-14 h-14 rounded-3xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center text-2xl mx-auto mb-2.5 shadow-md shadow-indigo-100">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+      </div>
+
+      <div class="inline-block px-3 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold mb-1.5">
+        AI FESTA 부스 체험 프로그램
+      </div>
+      <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mb-1.5">스케치 텔레파시 존</h2>
+      <p class="text-xs sm:text-sm text-slate-600 mb-4 leading-relaxed">
+        내가 그린 스케치를 인공지능(Vision AI)이 알아차릴 수 있을까요?<br class="hidden sm:inline">
+        사물의 가장 핵심적인 외곽선을 빠르게 그려 AI와 텔레파시를 나눠보세요!
+      </p>
+
+      <!-- 3단계 게임 진행 방식 카드 -->
+      <div class="grid grid-cols-3 gap-2 text-left mb-4">
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-2.5 flex flex-col justify-between">
+          <div class="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black mb-1">1</div>
+          <div class="text-xs font-bold text-slate-800 mb-0.5">제시어 확인</div>
+          <div class="text-[10px] text-slate-500 leading-tight">5초 동안 미션 단어와 핵심 팁을 확인합니다.</div>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-2.5 flex flex-col justify-between">
+          <div class="w-5 h-5 rounded-md bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-black mb-1">2</div>
+          <div class="text-xs font-bold text-slate-800 mb-0.5">핵심 스케치</div>
+          <div class="text-[10px] text-slate-500 leading-tight">15초 동안 태블릿에 특징 위주로 슥슥 그립니다.</div>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-2.5 flex flex-col justify-between">
+          <div class="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-black mb-1">3</div>
+          <div class="text-xs font-bold text-slate-800 mb-0.5">3초 실시간 판독</div>
+          <div class="text-[10px] text-slate-500 leading-tight">AI가 3초마다 소리 내어 정답 후보를 맞힙니다!</div>
+        </div>
+      </div>
+
+      <!-- 5회 중 4회 스탬프 부스 규칙 강조 -->
+      <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 mb-5 text-left flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 border border-amber-300 flex items-center justify-center text-base font-black shrink-0">
+          <i class="fa-solid fa-stamp"></i>
+        </div>
+        <div>
+          <div class="text-xs font-extrabold text-amber-900">부스 공식 미션 룰</div>
+          <div class="text-[11px] text-amber-800">
+            총 <strong>5번의 라운드</strong> 중 <strong class="text-indigo-700 font-extrabold">4번 이상</strong> AI가 정답을 맞히면 <strong>부스 인증 스탬프</strong>를 획득할 수 있습니다!
+          </div>
+        </div>
+      </div>
+
+      <!-- 시작 버튼 -->
+      <button id="startExperienceBtn" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-extrabold text-base shadow-lg shadow-indigo-300 active:scale-[0.99] transition flex items-center justify-center gap-2">
+        <i class="fa-solid fa-play"></i>
+        <span>도전 시작하기 (START)</span>
+      </button>
+
+    </div>
+  </div>
+
+  <div id="resultModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden text-center animate-in fade-in zoom-in duration-200">
+      
+      <div id="modalIconContainer" class="w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md">
+        <i id="modalIcon" class="fa-solid fa-trophy"></i>
+      </div>
+
+      <h2 id="modalTitle" class="text-2xl font-black text-slate-900 mb-1">텔레파시 대성공! 🎉</h2>
+      <p id="modalSubtitle" class="text-xs text-slate-600 mb-4 leading-relaxed">
+        AI가 나의 스케치 패턴을 파악했습니다!
+      </p>
+
+      <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 mb-4 text-left relative overflow-hidden">
+        <div class="flex items-center justify-between text-xs text-slate-500 border-b border-slate-200 pb-2 mb-2">
+          <span>제시어: <strong id="modalWord" class="text-slate-800">고양이</strong></span>
+          <span id="modalTimeSpent" class="font-mono text-indigo-700 font-bold">소요시간: 7.2초</span>
+        </div>
+        
+        <div class="flex items-center justify-between">
+          <div>
+            <div id="modalScoreStatus" class="text-[11px] text-slate-500 font-medium">현재 누적 점수: 1승 / 1라운드</div>
+            <div id="modalVerdictText" class="text-sm font-extrabold text-emerald-600">4승 달성 시 스탬프 지급!</div>
+          </div>
+
+          <!-- 도장 그래픽 배지 -->
+          <div id="stampBadge" class="w-14 h-14 rounded-full border-2 border-dashed border-pink-500 text-pink-600 flex flex-col items-center justify-center font-black rotate-[-12deg] shadow-md shadow-pink-200 transition-all duration-300">
+            <span class="text-[8px] uppercase tracking-tighter">AI FESTA</span>
+            <span id="stampStatusText" class="text-[11px] font-black">인증 완료</span>
+          </div>
+        </div>
+
+        <div id="modalAiComment" class="mt-2.5 pt-2 border-t border-slate-200 text-xs text-indigo-800 bg-indigo-50/70 p-2 rounded-lg border border-indigo-100">
+          🤖 AI 판독 코멘트: "특징 윤곽선을 감지했습니다!"
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button id="modalActionBtn" class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold shadow-md shadow-indigo-300 transition text-sm">
+          다음 라운드 도전
+        </button>
+        <button id="modalResetBtn" class="py-3 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold text-xs transition" title="처음 1라운드로 완전히 초기화">
+          새 참가자 리셋
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- AI 원리 설명 팝업 -->
+  <div id="conceptModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <i class="fa-solid fa-lightbulb"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">AI는 내 스케치를 어떻게 알아볼까요?</h3>
+        </div>
+        <button id="closeConceptBtn" class="text-slate-400 hover:text-slate-700 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <h4 class="font-bold text-indigo-800 mb-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-shapes"></i> 1. 복잡한 채색보다 '특징값(Feature)' 추출
+          </h4>
+          <p>
+            컴퓨터 비전(CNN/Vision AI)은 예쁜 명암보다 <strong>'선의 방향, 교차점, 모서리, 폐곡선 비율'</strong> 같은 고유 패턴을 추출해 수백만 개의 학습 데이터와 비교합니다.
+          </p>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <h4 class="font-bold text-pink-700 mb-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-layer-group"></i> 2. Google Quick, Draw! 방식의 비밀
+          </h4>
+          <p>
+            '안경'은 두 개의 동그라미와 가로선 하나만으로도 AI가 95% 이상 확신합니다. 사물의 가장 본질적인 핵심 윤곽선을 포착하는 것이 Vision AI의 핵심 지능입니다!
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-4 text-center">
+        <button id="confirmConceptBtn" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-sm">
+          이해했어요! 게임 계속하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 부스 운영자 설정 모달 -->
+  <div id="boothSettingsModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-indigo-600"></i> 부스 운영자 옵션
+        </h3>
+        <button id="closeSettingsBtn" class="text-slate-400 hover:text-slate-700 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">제한 시간 설정 (초)</label>
+          <div class="flex gap-2">
+            <button data-time="10" class="time-set-btn flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-200">10초</button>
+            <button data-time="15" class="time-set-btn flex-1 py-1.5 rounded-lg bg-indigo-600 text-white font-bold shadow-xs">15초 (권장)</button>
+            <button data-time="20" class="time-set-btn flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-200">20초</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">도전 횟수 및 합격 기준</label>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <span class="text-[11px] text-slate-500">총 기회:</span>
+              <select id="totalRoundsSelect" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-slate-800 mt-1">
+                <option value="5" selected>5회 (표준 규칙)</option>
+                <option value="3">3회 (대기열 빠를 때)</option>
+              </select>
+            </div>
+            <div>
+              <span class="text-[11px] text-slate-500">합격 최소 정답수:</span>
+              <select id="passTargetSelect" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-slate-800 mt-1">
+                <option value="4" selected>4회 이상 (권장)</option>
+                <option value="3">3회 이상</option>
+                <option value="2">2회 이상</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">제시어 난이도 카테고리</label>
+          <select id="wordCategorySelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 outline-none">
+            <option value="all">전체 (사물, 동물, 음식, 탈것, 가전 등 80여 종 랜덤)</option>
+            <option value="easy">초등/기초 (안경, 사과, 나무, 모자, 하트 등)</option>
+            <option value="animals">동물/자연 (고양이, 강아지, 코끼리, 나비, 무지개 등)</option>
+            <option value="objects">사물/탈것/가전 (비행기, 스마트폰, 피아노, 피자 등)</option>
+          </select>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100">
+          <label class="block font-bold text-slate-700 mb-1">API 모드 선택</label>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="apiMode" value="gemini" checked class="text-indigo-600">
+              <span class="text-slate-800">Gemini Vision (온라인)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="apiMode" value="smart_mock" class="text-indigo-600">
+              <span class="text-slate-800">스마트 시뮬레이션 (오프라인)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button id="saveSettingsBtn" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-sm">
+          설정 저장 및 적용
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WORD_DATABASE = [
+      // 1. 기초 / 쉬운 사물 (초등/가족 친화)
+      { word: "안경", category: "사물", level: "easy", hint: "두 개의 동그란 알과 가운데 연결 다리를 그려보세요!", keywords: ["안경", "선글라스", "glasses", "spectacles"] },
+      { word: "사과", category: "음식", level: "easy", hint: "동그란 모양 위에 꼭지와 앙증맞은 잎사귀 하나!", keywords: ["사과", "apple", "과일"] },
+      { word: "나무", category: "자연", level: "easy", hint: "곧게 뻗은 기둥과 뭉게구름처럼 둥근 나뭇잎!", keywords: ["나무", "tree", "숲"] },
+      { word: "모자", category: "패션", level: "easy", hint: "머리를 덮는 반원 뚜껑과 챙을 그려보세요!", keywords: ["모자", "hat", "cap", "야구모자"] },
+      { word: "시계", category: "사물", level: "easy", hint: "동그란 테두리 안에 시침과 분침 두 개를 그어주세요!", keywords: ["시계", "손목시계", "clock", "watch"] },
+      { word: "우산", category: "사물", level: "easy", hint: "반원형 덮개와 아래로 둥글게 꺾인 지팡이 손잡이!", keywords: ["우산", "양산", "umbrella"] },
+      { word: "별", category: "자연", level: "easy", hint: "다섯 갈래로 뾰족뾰족 뻗은 오각 별을 그려요!", keywords: ["별", "스타", "star"] },
+      { word: "하트", category: "기호", level: "easy", hint: "사랑을 표현하는 두 개의 봉긋한 곡선과 뾰족한 끝!", keywords: ["하트", "heart", "사랑"] },
+      { word: "달", category: "자연", level: "easy", hint: "날렵하게 휘어진 예쁜 초승달 모양을 그려보세요!", keywords: ["달", "초승달", "moon", "crescent"] },
+      { word: "태양", category: "자연", level: "easy", hint: "동그란 원 주위로 사방으로 뻗어나가는 햇살 선들!", keywords: ["태양", "해", "sun", "sunshine"] },
+      { word: "구름", category: "자연", level: "easy", hint: "하늘에 둥둥 떠 있는 몽실몽실한 솜사탕 모양!", keywords: ["구름", "cloud"] },
+      { word: "꽃", category: "자연", level: "easy", hint: "가운데 둥근 수술과 둥글둥글한 꽃잎들을 둘러줘요!", keywords: ["꽃", "flower", "화초"] },
+      { word: "집", category: "건축", level: "easy", hint: "세모난 지붕과 네모난 벽, 그리고 문과 창문!", keywords: ["집", "house", "home", "건물"] },
+      { word: "눈사람", category: "자연", level: "easy", hint: "크고 작은 눈 뭉치 두 개와 단추, 나뭇가지 팔!", keywords: ["눈사람", "snowman"] },
+      { word: "컵", category: "사물", level: "easy", hint: "둥근 원통형 몸통 옆에 손잡이 귀를 달아주세요!", keywords: ["컵", "머그컵", "cup", "mug"] },
+      { word: "책", category: "사물", level: "easy", hint: "펼쳐진 두 면이나 두툼한 직사각형 책 표지!", keywords: ["책", "교과서", "book"] },
+      { word: "풍선", category: "사물", level: "easy", hint: "달걀형 풍선 밑에 매듭과 구불구불한 실 한 가닥!", keywords: ["풍선", "balloon"] },
+      { word: "계란프라이", category: "음식", level: "easy", hint: "구불구불한 흰자 테두리 한가운데 노른자 쏙!", keywords: ["계란", "달걀", "계란후라이", "egg", "fried egg"] },
+
+      // 2. 동물 / 생물 (인기 카테고리)
+      { word: "고양이", category: "동물", level: "animals", hint: "뾰족한 세모 귀 두 개와 양볼에 뻗은 수염!", keywords: ["고양이", "야옹이", "cat", "kitty"] },
+      { word: "강아지", category: "동물", level: "animals", hint: "아래로 축 늘어진 귀나 쫑긋한 귀, 혀를 쏙 내민 입!", keywords: ["강아지", "개", "dog", "puppy"] },
+      { word: "물고기", category: "생물", level: "animals", hint: "타원형 몸통 끝에 삼각 꼬리지느러미와 눈 하나!", keywords: ["물고기", "생선", "fish"] },
+      { word: "나비", category: "생물", level: "animals", hint: "가운데 가느다란 몸통과 양옆 대칭의 날개 네 장!", keywords: ["나비", "butterfly"] },
+      { word: "토끼", category: "동물", level: "animals", hint: "머리 위로 길쭉하게 솟아오른 두 개의 긴 귀!", keywords: ["토끼", "rabbit", "bunny"] },
+      { word: "코끼리", category: "동물", level: "animals", hint: "바닥까지 길게 늘어진 코와 펄럭이는 부채 같은 큰 귀!", keywords: ["코끼리", "elephant"] },
+      { word: "기린", category: "동물", level: "animals", hint: "위로 아주 길쭉하게 뻗은 목과 얼룩무늬 패턴!", keywords: ["기린", "giraffe"] },
+      { word: "사자", category: "동물", level: "animals", hint: "얼굴 주위를 둥글게 둘러싼 웅장하고 풍성한 갈기!", keywords: ["사자", "lion"] },
+      { word: "원숭이", category: "동물", level: "animals", hint: "동글동글한 얼굴형과 양옆으로 툭 튀어나온 둥근 귀!", keywords: ["원숭이", "monkey"] },
+      { word: "문어", category: "생물", level: "animals", hint: "동그란 머리 아래로 꼬불꼬불 뻗은 문어 다리들!", keywords: ["문어", "octopus"] },
+      { word: "게", category: "생물", level: "animals", hint: "양옆으로 솟은 큼직한 집게발 두 개와 다리들!", keywords: ["게", "꽃게", "crab"] },
+      { word: "거북이", category: "생물", level: "animals", hint: "육각형 무늬가 있는 볼록한 등껍질과 빼꼼 나온 머리!", keywords: ["거북이", "거북", "turtle"] },
+      { word: "새", category: "생물", level: "animals", hint: "뾰족한 부리와 날개, 앙증맞은 꼬리깃털!", keywords: ["새", "참새", "bird"] },
+      { word: "오리", category: "동물", level: "animals", hint: "넓적하고 납작한 부리와 통통한 꼬리깃털!", keywords: ["오리", "duck"] },
+      { word: "개구리", category: "생물", level: "animals", hint: "머리 위로 볼록 튀어나온 두 눈과 넙적한 입!", keywords: ["개구리", "frog"] },
+      { word: "뱀", category: "생물", level: "animals", hint: "S자로 구불구불 기어가는 길쭉한 몸과 갈라진 혀!", keywords: ["뱀", "snake"] },
+      { word: "달팽이", category: "생물", level: "animals", hint: "돌돌 말린 소용돌이 등껍질과 더듬이 두 개!", keywords: ["달팽이", "snail"] },
+      { word: "상어", category: "생물", level: "animals", hint: "등 위에 우뚝 솟은 삼각형 지느러미와 날카로운 이빨!", keywords: ["상어", "shark"] },
+
+      // 3. 음식 / 디저트
+      { word: "피자", category: "음식", level: "objects", hint: "부채꼴 세모 조각 위에 동글동글 페퍼로니 토핑!", keywords: ["피자", "pizza"] },
+      { word: "햄버거", category: "음식", level: "objects", hint: "둥근 번 빵 사이에 두툼한 패티와 양상추 층!", keywords: ["햄버거", "버거", "hamburger", "burger"] },
+      { word: "아이스크림", category: "음식", level: "easy", hint: "세모난 와플 콘 위에 둥글게 얹혀진 스쿱!", keywords: ["아이스크림", "icecream", "ice cream"] },
+      { word: "케이크", category: "음식", level: "objects", hint: "원통형 케이크 몸통과 위에 꽂힌 불붙은 촛불!", keywords: ["케이크", "생일케이크", "cake"] },
+      { word: "바나나", category: "음식", level: "easy", hint: "노랗게 활처럼 완만하게 휘어진 길쭉한 곡선!", keywords: ["바나나", "banana"] },
+      { word: "포도", category: "음식", level: "easy", hint: "역삼각형 모양으로 올망졸망 뭉쳐있는 포도알들!", keywords: ["포도", "grape", "grapes"] },
+      { word: "수박", category: "음식", level: "easy", hint: "세모난 수박 조각에 박힌 까만 수박씨들!", keywords: ["수박", "watermelon"] },
+      { word: "사탕", category: "음식", level: "easy", hint: "동그란 막대사탕이나 양끝이 꼬인 포장 사탕!", keywords: ["사탕", "캔디", "candy", "lollipop"] },
+      { word: "도넛", category: "음식", level: "easy", hint: "가운데 뻥 뚫린 튜브 모양의 둥근 링과 글레이즈!", keywords: ["도넛", "도너츠", "donut", "doughnut"] },
+      { word: "김밥", category: "음식", level: "objects", hint: "둥근 단면 안에 당근, 단무지 등 알록달록 속재료!", keywords: ["김밥", "gimbap", "kimbap"] },
+      { word: "프렌치프라이", category: "음식", level: "objects", hint: "상자 안에 길쭉길쭉 꽂혀있는 감자튀김 막대들!", keywords: ["감자튀김", "프렌치프라이", "fries", "french fries"] },
+
+      // 4. 탈것 / 교통수단
+      { word: "비행기", category: "탈것", level: "objects", hint: "길쭉한 원통형 동체와 양옆 큰 날개, 수직 꼬리날개!", keywords: ["비행기", "airplane", "plane", "여객기"] },
+      { word: "자동차", category: "탈것", level: "objects", hint: "동그란 두 바퀴 위에 네모난 차체와 창문!", keywords: ["자동차", "차", "car", "승용차"] },
+      { word: "자전거", category: "탈것", level: "objects", hint: "앞뒤 두 개의 둥근 바퀴와 다이아몬드 프레임, 손잡이!", keywords: ["자전거", "bicycle", "bike"] },
+      { word: "배", category: "탈것", level: "objects", hint: "물 위에 뜬 완만한 곡선의 선체와 펄럭이는 돛!", keywords: ["배", "보트", "선박", "ship", "boat", "yacht"] },
+      { word: "로켓", category: "탈것", level: "objects", hint: "원뿔형 탄두에 아래로 불꽃을 뿜어내는 우주선!", keywords: ["로켓", "우주선", "rocket", "spaceship"] },
+      { word: "기차", category: "탈것", level: "objects", hint: "굴뚝에서 연기가 나는 기관차와 연달아 붙은 네모 객차!", keywords: ["기차", "열차", "train", "기관차"] },
+      { word: "헬리콥터", category: "탈것", level: "objects", hint: "둥근 기체 지붕 위에서 빠르게 도는 대형 프로펠러!", keywords: ["헬리콥터", "헬기", "helicopter"] },
+      { word: "경찰차", category: "탈것", level: "objects", hint: "자동차 지붕 한가운데 번쩍이는 반원형 경광등!", keywords: ["경찰차", "police car", "순찰차"] },
+
+      // 5. 악기 / 사물 / 가전 / 생활 도구
+      { word: "피아노", category: "악기", level: "objects", hint: "직사각형 건반 덮개와 흑백 건반 줄무늬!", keywords: ["피아노", "piano", "건반"] },
+      { word: "기타", category: "악기", level: "objects", hint: "조롱박 모양의 통과 길쭉한 넥, 팽팽한 줄들!", keywords: ["기타", "guitar", "통기타"] },
+      { word: "드럼", category: "악기", level: "objects", hint: "원통형 북과 양옆에 교차된 두 개의 드럼 스틱!", keywords: ["드럼", "북", "drum"] },
+      { word: "가위", category: "도구", level: "objects", hint: "가운데 축을 중심으로 X자로 교차된 날과 두 손잡이 구멍!", keywords: ["가위", "scissors"] },
+      { word: "선풍기", category: "가전", level: "objects", hint: "둥근 안전망 속에 회전하는 3장의 날개와 받침대!", keywords: ["선풍기", "fan"] },
+      { word: "스마트폰", category: "가전", level: "objects", hint: "모서리가 둥근 직사각형 화면과 상단 카메라 렌즈!", keywords: ["스마트폰", "휴대폰", "핸드폰", "phone", "smartphone"] },
+      { word: "텔레비전", category: "가전", level: "objects", hint: "큼직한 사각형 화면과 V자 안테나 또는 스탠드!", keywords: ["텔레비전", "TV", "티비", "television"] },
+      { word: "컴퓨터", category: "가전", level: "objects", hint: "모니터 화면과 아래 네모난 키보드 자판!", keywords: ["컴퓨터", "모니터", "computer", "pc"] },
+      { word: "열쇠", category: "사물", level: "easy", hint: "둥근 머리 고리와 길쭉한 자루 끝의 톱니 홈!", keywords: ["열쇠", "키", "key"] },
+      { word: "전등", category: "사물", level: "easy", hint: "둥근 전구 유리알과 아래쪽 나사산 소켓!", keywords: ["전구", "전등", "lightbulb", "lamp"] },
+      { word: "연필", category: "도구", level: "easy", hint: "길쭉한 육각 몸통과 뾰족하게 깎인 심, 지우개 끝!", keywords: ["연필", "pencil"] },
+      { word: "촛불", category: "사물", level: "easy", hint: "원통형 양초 기둥과 일렁이며 타오르는 물방울 불꽃!", keywords: ["촛불", "양초", "candle"] },
+      { word: "다이아몬드", category: "사물", level: "easy", hint: "윗면은 평평하고 아랫면은 역삼각형으로 깎인 보석!", keywords: ["다이아몬드", "보석", "diamond", "gem"] },
+      { word: "칫솔", category: "도구", level: "easy", hint: "길쭉한 손잡이 머리에 오밀조밀 심겨진 칫솔모!", keywords: ["칫솔", "toothbrush"] },
+      { word: "신발", category: "패션", level: "easy", hint: "발목 입구와 바닥 창, 둥근 앞코가 돋보이는 신발!", keywords: ["신발", "운동화", "구두", "shoes", "sneakers"] },
+      { word: "축구공", category: "스포츠", level: "objects", hint: "둥근 원 안에 그려진 오각형과 육각형 가죽 무늬!", keywords: ["축구공", "soccer", "football"] },
+      { word: "야구배트", category: "스포츠", level: "objects", hint: "손잡이는 가늘고 끝으로 갈수록 두꺼워지는 방망이!", keywords: ["야구배트", "야구방망이", "bat", "baseball"] },
+      { word: "카메라", category: "사물", level: "objects", hint: "직사각형 바디 한가운데 볼록 솟은 둥근 렌즈와 셔터!", keywords: ["카메라", "camera"] },
+      { word: "헤드폰", category: "사물", level: "objects", hint: "머리 위를 둥글게 잇는 헤드밴드와 양쪽 푹신한 이어컵!", keywords: ["헤드폰", "headphones", "헤드셋"] }
+    ];
+
+    let gameState = {
+      status: "idle", // 'idle' | 'previewing' | 'playing' | 'analyzing' | 'finished'
+      currentWordObj: null,
+      maxTime: 15.0,
+      timeLeft: 15.0,
+      timerInterval: null,
+      analysisInterval: null,
+      previewInterval: null,
+      previewTimeLeft: 5.0,
+      ttsEnabled: true,
+      currentStrokeCount: 0,
+      startTime: 0,
+      elapsedTime: 0,
+      apiMode: "gemini",
+      
+      // 5회 중 4회 성공 규칙 및 중복 방지 풀
+      totalRounds: 5,
+      passTarget: 4,
+      currentRound: 1,
+      successCount: 0,
+      roundResults: [],
+      usedWordsHistory: [] // 한 세션(5라운드) 동안 중복 출제 방지
+    };
+
+    const canvas = document.getElementById("sketchCanvas");
+    const ctx = canvas.getContext("2d");
+    const canvasWrapper = document.getElementById("canvasWrapper");
+
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let currentPenSize = 9;
+    let isEraser = false;
+
+    function resizeCanvas() {
+      if (!canvasWrapper) return;
+      const rect = canvasWrapper.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      
+      let tempCanvas = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        tempCanvas = document.createElement("canvas");
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(canvas, 0, 0);
+      }
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      if (tempCanvas) {
+        ctx.drawImage(tempCanvas, 0, 0, rect.width, rect.height);
+      }
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    function getPointerPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      let clientX = e.clientX;
+      let clientY = e.clientY;
+
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      }
+
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    function startDrawing(e) {
+      if (gameState.status !== "playing") return;
+      isDrawing = true;
+      const pos = getPointerPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+      gameState.currentStrokeCount++;
+      const strokeText = document.getElementById("strokeCountText");
+      if (strokeText) strokeText.textContent = `선 획수: ${gameState.currentStrokeCount}개`;
+    }
+
+    function draw(e) {
+      if (!isDrawing || gameState.status !== "playing") return;
+      e.preventDefault();
+      const pos = getPointerPos(e);
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.strokeStyle = isEraser ? "#ffffff" : "#1e293b";
+      ctx.lineWidth = isEraser ? currentPenSize * 2.5 : currentPenSize;
+      ctx.stroke();
+
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function stopDrawing() {
+      isDrawing = false;
+    }
+
+    canvas.addEventListener("mousedown", startDrawing);
+    canvas.addEventListener("mousemove", draw);
+    canvas.addEventListener("mouseup", stopDrawing);
+    canvas.addEventListener("mouseleave", stopDrawing);
+
+    canvas.addEventListener("touchstart", startDrawing, { passive: false });
+    canvas.addEventListener("touchmove", draw, { passive: false });
+    canvas.addEventListener("touchend", stopDrawing);
+    canvas.addEventListener("touchcancel", stopDrawing);
+
+    const penToolBtn = document.getElementById("penToolBtn");
+    const eraserToolBtn = document.getElementById("eraserToolBtn");
+    const sizeBtns = document.querySelectorAll(".size-btn");
+    const clearCanvasBtn = document.getElementById("clearCanvasBtn");
+
+    if (penToolBtn) {
+      penToolBtn.addEventListener("click", () => {
+        isEraser = false;
+        penToolBtn.className = "px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition";
+        if (eraserToolBtn) {
+          eraserToolBtn.className = "px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition border border-slate-200";
+        }
+      });
+    }
+
+    if (eraserToolBtn) {
+      eraserToolBtn.addEventListener("click", () => {
+        isEraser = true;
+        eraserToolBtn.className = "px-3 py-1.5 rounded-xl bg-pink-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition";
+        if (penToolBtn) {
+          penToolBtn.className = "px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition border border-slate-200";
+        }
+      });
+    }
+
+    sizeBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        sizeBtns.forEach(b => {
+          b.className = "size-btn w-6 h-6 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-800 flex items-center justify-center transition";
+        });
+        btn.className = "size-btn w-6 h-6 rounded-lg text-[10px] font-bold bg-white text-indigo-700 shadow-xs border border-indigo-200 flex items-center justify-center transition";
+        currentPenSize = parseInt(btn.getAttribute("data-size"), 10);
+      });
+    });
+
+    function clearCanvasArea() {
+      if (!canvasWrapper) return;
+      const rect = canvasWrapper.getBoundingClientRect();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      gameState.currentStrokeCount = 0;
+      const strokeText = document.getElementById("strokeCountText");
+      if (strokeText) strokeText.textContent = `선 획수: 0개`;
+    }
+
+    if (clearCanvasBtn) clearCanvasBtn.addEventListener("click", clearCanvasArea);
+
+    function speakAI(text) {
+      if (!gameState.ttsEnabled || !window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ko-KR";
+      utterance.rate = 1.15;
+      utterance.pitch = 1.1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    const ttsToggleBtn = document.getElementById("ttsToggleBtn");
+    const ttsIcon = document.getElementById("ttsIcon");
+    const ttsLabel = document.getElementById("ttsLabel");
+
+    if (ttsToggleBtn) {
+      ttsToggleBtn.addEventListener("click", () => {
+        gameState.ttsEnabled = !gameState.ttsEnabled;
+        if (gameState.ttsEnabled) {
+          if (ttsIcon) ttsIcon.className = "fa-solid fa-volume-high text-indigo-600";
+          if (ttsLabel) ttsLabel.textContent = "AI 음성 ON";
+        } else {
+          window.speechSynthesis.cancel();
+          if (ttsIcon) ttsIcon.className = "fa-solid fa-volume-xmark text-slate-400";
+          if (ttsLabel) ttsLabel.textContent = "AI 음성 OFF";
+        }
+      });
+    }
+
+    function renderRoundSlots() {
+      const container = document.getElementById("roundSlotsContainer");
+      if (!container) return;
+      container.innerHTML = "";
+
+      for (let i = 1; i <= gameState.totalRounds; i++) {
+        const slot = document.createElement("div");
+        const result = gameState.roundResults[i - 1];
+
+        if (result) {
+          if (result.success) {
+            slot.className = "w-6 h-6 rounded-lg bg-emerald-100 border border-emerald-400 text-emerald-700 flex items-center justify-center text-[11px] font-black shadow-xs";
+            slot.innerHTML = `<i class="fa-solid fa-circle-check"></i>`;
+            slot.title = `R${i}: ${result.word} (성공)`;
+          } else {
+            slot.className = "w-6 h-6 rounded-lg bg-rose-100 border border-rose-300 text-rose-600 flex items-center justify-center text-[11px] font-black";
+            slot.innerHTML = `<i class="fa-solid fa-circle-xmark"></i>`;
+            slot.title = `R${i}: ${result.word} (실패)`;
+          }
+        } else if (i === gameState.currentRound) {
+          slot.className = "w-6 h-6 rounded-lg bg-indigo-600 text-white border border-indigo-400 flex items-center justify-center text-[11px] font-black ring-2 ring-indigo-300 animate-pulse";
+          slot.textContent = i;
+          slot.title = `현재 R${i} 진행 중`;
+        } else {
+          slot.className = "w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center text-[11px] font-bold";
+          slot.textContent = i;
+          slot.title = `R${i} 대기`;
+        }
+
+        container.appendChild(slot);
+      }
+    }
+
+    function updateScoreBanner() {
+      const scoreText = document.getElementById("currentScoreText");
+      if (scoreText) scoreText.textContent = `${gameState.successCount} / ${gameState.totalRounds} 성공`;
+      
+      const remain = Math.max(0, gameState.totalRounds - (gameState.currentRound - 1));
+      const remainText = document.getElementById("remainingRoundsText");
+      if (remainText) remainText.textContent = `${remain}회`;
+
+      const roundBadge = document.getElementById("currentRoundBadge");
+      if (roundBadge) roundBadge.textContent = `ROUND ${gameState.currentRound} / ${gameState.totalRounds}`;
+      
+      const reminder = document.getElementById("currentMissionWordReminder");
+      if (reminder && gameState.currentWordObj) {
+        reminder.textContent = gameState.currentWordObj.word;
+      }
+    }
+
+    function pickRandomWord() {
+      const categorySelect = document.getElementById("wordCategorySelect");
+      const categoryFilter = categorySelect ? categorySelect.value : "all";
+      let pool = WORD_DATABASE;
+
+      if (categoryFilter !== "all") {
+        pool = WORD_DATABASE.filter(item => item.level === categoryFilter || item.category === categoryFilter);
+        if (pool.length === 0) pool = WORD_DATABASE;
+      }
+
+      // 5라운드 세션 동안 이미 사용한 단어는 제외하여 항상 새로운 문제가 나오도록 처리
+      let availableWords = pool.filter(item => !gameState.usedWordsHistory.includes(item.word));
+      if (availableWords.length === 0) {
+        // 모든 단어가 소진된 예외적 상황 시 리셋
+        gameState.usedWordsHistory = [];
+        availableWords = pool;
+      }
+
+      // 무작위 셔플 후 선택
+      const randomIndex = Math.floor(Math.random() * availableWords.length);
+      const randomItem = availableWords[randomIndex];
+
+      gameState.currentWordObj = randomItem;
+      gameState.usedWordsHistory.push(randomItem.word);
+
+      const reminder = document.getElementById("currentMissionWordReminder");
+      if (reminder) reminder.textContent = randomItem.word;
+    }
+
+    function startWordPreview(roundNum) {
+      clearInterval(gameState.timerInterval);
+      clearInterval(gameState.analysisInterval);
+      clearInterval(gameState.previewInterval);
+
+      gameState.status = "previewing";
+      gameState.previewTimeLeft = 5.0;
+      clearCanvasArea();
+      pickRandomWord();
+      updateScoreBanner();
+
+      const modal = document.getElementById("wordPreviewModal");
+      const roundBadge = document.getElementById("previewRoundBadge");
+      const wordText = document.getElementById("previewWordText");
+      const categoryBadge = document.getElementById("previewCategoryBadge");
+      const hintText = document.getElementById("previewHintText");
+      const countdownNumber = document.getElementById("previewCountdownNumber");
+      const progressBar = document.getElementById("previewProgressBar");
+
+      if (roundBadge) roundBadge.textContent = `${gameState.currentRound} ROUND 제시어`;
+      if (wordText) wordText.textContent = gameState.currentWordObj.word;
+      if (categoryBadge) categoryBadge.textContent = gameState.currentWordObj.category;
+      if (hintText) hintText.innerHTML = `💡 팁: ${gameState.currentWordObj.hint}`;
+      if (countdownNumber) countdownNumber.textContent = "5초";
+      if (progressBar) progressBar.style.width = "100%";
+
+      if (modal) modal.classList.remove("hidden");
+      speakAI(`${gameState.currentRound}라운드 제시어는 ${gameState.currentWordObj.word}입니다. 5초 뒤 시작합니다!`);
+
+      gameState.previewInterval = setInterval(() => {
+        gameState.previewTimeLeft = Math.max(0, gameState.previewTimeLeft - 0.1);
+        if (countdownNumber) countdownNumber.textContent = `${Math.ceil(gameState.previewTimeLeft)}초`;
+        const pct = (gameState.previewTimeLeft / 5.0) * 100;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+
+        if (gameState.previewTimeLeft <= 0) {
+          clearInterval(gameState.previewInterval);
+          if (modal) modal.classList.add("hidden");
+          startDrawingPhase();
+        }
+      }, 100);
+    }
+
+    // 5초 미리보기 건너뛰기 버튼 안전한 바인딩
+    const skipPreviewBtn = document.getElementById("skipPreviewBtn");
+    if (skipPreviewBtn) {
+      skipPreviewBtn.addEventListener("click", () => {
+        clearInterval(gameState.previewInterval);
+        const modal = document.getElementById("wordPreviewModal");
+        if (modal) modal.classList.add("hidden");
+        startDrawingPhase();
+      });
+    }
+
+    function startDrawingPhase() {
+      clearCanvasArea();
+      gameState.status = "playing";
+      gameState.timeLeft = gameState.maxTime;
+      gameState.startTime = Date.now();
+
+      const timeProgressBar = document.getElementById("timeProgressBar");
+      const timeLeftLabel = document.getElementById("timeLeftLabel");
+      const scanStatusIndicator = document.getElementById("scanStatusIndicator");
+
+      if (scanStatusIndicator) {
+        scanStatusIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 판독 대기`;
+      }
+
+      updatePredictionsUI([
+        { name: "그림 대기 중...", confidence: 0 },
+        { name: "-", confidence: 0 },
+        { name: "-", confidence: 0 }
+      ]);
+
+      updateAiSpeech(`"${gameState.currentWordObj.word}"(을)를 그려주세요! 3초마다 맞춰볼게요!`);
+      speakAI("지금 바로 그려주세요!");
+
+      clearInterval(gameState.timerInterval);
+      gameState.timerInterval = setInterval(() => {
+        gameState.timeLeft = Math.max(0, gameState.timeLeft - 0.1);
+        if (timeLeftLabel) timeLeftLabel.textContent = `${gameState.timeLeft.toFixed(1)}s`;
+        
+        const pct = (gameState.timeLeft / gameState.maxTime) * 100;
+        if (timeProgressBar) {
+          timeProgressBar.style.width = `${pct}%`;
+          if (pct < 30) {
+            timeProgressBar.className = "h-full bg-rose-500 rounded-full transition-all duration-100 ease-linear animate-pulse";
+          } else if (pct < 60) {
+            timeProgressBar.className = "h-full bg-amber-400 rounded-full transition-all duration-100 ease-linear";
+          } else {
+            timeProgressBar.className = "h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500 rounded-full transition-all duration-100 ease-linear";
+          }
+        }
+
+        if (gameState.timeLeft <= 0) {
+          endRound(false, "제한 시간 15초가 지났습니다!");
+        }
+      }, 100);
+
+      // 3초 주기 실시간 AI 판독 타이머
+      clearInterval(gameState.analysisInterval);
+      setTimeout(() => {
+        if (gameState.status === "playing") triggerVisionAnalysis();
+      }, 2500);
+
+      gameState.analysisInterval = setInterval(() => {
+        if (gameState.status === "playing") {
+          triggerVisionAnalysis();
+        }
+      }, 3000);
+    }
+
+    async function triggerVisionAnalysis() {
+      if (gameState.currentStrokeCount < 1) {
+        updateAiSpeech("아직 캔버스가 비어있어요. 어서 첫 획을 그어보세요!");
+        return;
+      }
+
+      const scanLine = document.getElementById("scanLine");
+      if (scanLine) scanLine.classList.remove("hidden");
+      
+      const scanIndicator = document.getElementById("scanStatusIndicator");
+      if (scanIndicator) {
+        scanIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-cyan-500 animate-ping"></span> 판독 중...`;
+      }
+      
+      const base64Data = canvas.toDataURL("image/png").split(",")[1];
+
+      try {
+        if (gameState.apiMode === "gemini") {
+          await callGeminiVision(base64Data);
+        } else {
+          simulateVisionAi();
+        }
+      } catch (err) {
+        console.warn("Vision API 이슈로 스마트 시뮬레이션으로 자동 대체:", err);
+        simulateVisionAi();
+      } finally {
+        setTimeout(() => {
+          if (scanLine) scanLine.classList.add("hidden");
+          if (gameState.status === "playing" && scanIndicator) {
+            scanIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> 수신 대기`;
+          }
+        }, 700);
+      }
+    }
+
+    const manualPredictBtn = document.getElementById("manualPredictBtn");
+    if (manualPredictBtn) {
+      manualPredictBtn.addEventListener("click", () => {
+        if (gameState.status === "playing") {
+          triggerVisionAnalysis();
+        }
+      });
+    }
+
+    async function callGeminiVision(base64ImageData) {
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      const systemInstruction = `당신은 AI 페스타 부스에서 Google 'Quick, Draw!'와 유사하게 사용자의 간단한 손그림 낙서/스케치를 실시간으로 판독하는 스케치 분류 AI입니다.
+반드시 아래 JSON 형식으로만 응답해야 합니다:
+{
+  "topPredictions": [
+    {"name": "한국어 단어명", "confidence": 0~100 사이 숫자},
+    {"name": "한국어 단어명", "confidence": 0~100 사이 숫자},
+    {"name": "한국어 단어명", "confidence": 0~100 사이 숫자}
+  ],
+  "featureComment": "발견한 시각적 특징 1문장",
+  "spokenGuess": "친근한 AI 말투의 짧은 추측 발화 (예: 혹시... 안경인가요?)"
+}`;
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: "이 흑백 손그림 스케치를 분석하여 Quick, Draw 스타일로 가장 유력한 사물/동물 3가지를 예측해 JSON으로 반환해주세요." },
+              {
+                inlineData: {
+                  mimeType: "image/png",
+                  data: base64ImageData
+                }
+              }
+            ]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      };
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+      const result = await response.json();
+      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) throw new Error("Empty response");
+
+      const parsed = JSON.parse(rawText);
+      handleAiPredictionResult(parsed);
+    }
+
+    function simulateVisionAi() {
+      const target = gameState.currentWordObj;
+      const strokes = gameState.currentStrokeCount;
+      const timeElapsed = gameState.maxTime - gameState.timeLeft;
+
+      let targetConf = Math.min(96, Math.floor(25 + (strokes * 9) + (timeElapsed * 3)));
+      if (strokes < 2) targetConf = 20;
+
+      const otherWords = WORD_DATABASE.filter(w => w.word !== target.word);
+      const fake1 = otherWords[Math.floor(Math.random() * otherWords.length)];
+      const fake2 = otherWords[(Math.floor(Math.random() * otherWords.length) + 1) % otherWords.length];
+
+      let predictions = [];
+      if (targetConf >= 55) {
+        predictions = [
+          { name: target.word, confidence: targetConf },
+          { name: fake1.word, confidence: Math.max(10, 100 - targetConf - 15) },
+          { name: fake2.word, confidence: Math.max(5, 100 - targetConf - 25) }
+        ];
+      } else {
+        predictions = [
+          { name: fake1.word, confidence: 45 },
+          { name: target.word, confidence: targetConf },
+          { name: fake2.word, confidence: 25 }
+        ];
+      }
+
+      const parsed = {
+        topPredictions: predictions,
+        featureComment: `${target.hint}`,
+        spokenGuess: targetConf >= 55 ? `혹시... ${target.word} 맞나요?!` : `음... ${predictions[0].name}? 아니면 ${target.word}인가요?`
+      };
+
+      handleAiPredictionResult(parsed);
+    }
+
+    function handleAiPredictionResult(data) {
+      if (gameState.status !== "playing") return;
+
+      const predictions = data.topPredictions || [];
+      updatePredictionsUI(predictions);
+
+      if (data.spokenGuess) {
+        updateAiSpeech(data.spokenGuess);
+        speakAI(data.spokenGuess);
+      }
+
+      const topPick = predictions[0];
+      const target = gameState.currentWordObj;
+
+      const isMatch = topPick && (
+        topPick.name.includes(target.word) || 
+        target.word.includes(topPick.name) ||
+        (target.keywords && target.keywords.some(k => topPick.name.toLowerCase().includes(k.toLowerCase())))
+      );
+
+      if (isMatch && (topPick.confidence >= 48 || gameState.currentStrokeCount >= 3)) {
+        endRound(true, `AI가 ${topPick.confidence}% 확신으로 정답을 맞혔습니다!`);
+      }
+    }
+
+    function updatePredictionsUI(predictions) {
+      const container = document.getElementById("predictionsList");
+      if (!container) return;
+      container.innerHTML = "";
+
+      predictions.slice(0, 3).forEach((item, index) => {
+        const slot = document.createElement("div");
+        const isFirst = index === 0;
+        
+        slot.className = `flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold transition-all ${
+          isFirst 
+            ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm' 
+            : 'bg-slate-50 text-slate-700 border-slate-200'
+        }`;
+
+        const rankBadge = isFirst 
+          ? `<span class="w-4 h-4 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black flex items-center justify-center shrink-0">1</span>`
+          : `<span class="w-4 h-4 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">${index + 1}</span>`;
+
+        slot.innerHTML = `
+          ${rankBadge}
+          <span class="truncate max-w-[80px] sm:max-w-[100px]">${item.name || '-'}</span>
+          <span class="font-mono text-[10px] ${isFirst ? 'text-indigo-200' : 'text-slate-400'}">${item.confidence || 0}%</span>
+        `;
+        container.appendChild(slot);
+      });
+    }
+
+    function updateAiSpeech(text) {
+      const bubble = document.getElementById("aiSpeechBubble");
+      if (bubble) bubble.textContent = `"${text}"`;
+    }
+
+    function endRound(isSuccess, reason) {
+      gameState.status = "finished";
+      clearInterval(gameState.timerInterval);
+      clearInterval(gameState.analysisInterval);
+      clearInterval(gameState.previewInterval);
+
+      const elapsed = ((Date.now() - gameState.startTime) / 1000).toFixed(1);
+      gameState.elapsedTime = elapsed;
+
+      gameState.roundResults.push({
+        round: gameState.currentRound,
+        word: gameState.currentWordObj.word,
+        success: isSuccess,
+        time: elapsed
+      });
+
+      if (isSuccess) gameState.successCount++;
+
+      renderRoundSlots();
+      updateScoreBanner();
+
+      const isFinalRound = gameState.currentRound >= gameState.totalRounds;
+      const passedMission = gameState.successCount >= gameState.passTarget;
+
+      const modal = document.getElementById("resultModal");
+      const modalTitle = document.getElementById("modalTitle");
+      const modalSubtitle = document.getElementById("modalSubtitle");
+      const modalIcon = document.getElementById("modalIcon");
+      const modalIconContainer = document.getElementById("modalIconContainer");
+      const stampBadge = document.getElementById("stampBadge");
+      const stampStatusText = document.getElementById("stampStatusText");
+      const modalWord = document.getElementById("modalWord");
+      const modalTimeSpent = document.getElementById("modalTimeSpent");
+      const modalScoreStatus = document.getElementById("modalScoreStatus");
+      const modalVerdictText = document.getElementById("modalVerdictText");
+      const modalAiComment = document.getElementById("modalAiComment");
+      const modalActionBtn = document.getElementById("modalActionBtn");
+
+      if (modalWord) modalWord.textContent = gameState.currentWordObj.word;
+      if (modalTimeSpent) modalTimeSpent.textContent = `소요시간: ${elapsed}초 / ${gameState.maxTime}초`;
+      if (modalScoreStatus) modalScoreStatus.textContent = `현재 누적 스코어: ${gameState.successCount}승 / ${gameState.currentRound}라운드`;
+
+      if (isFinalRound) {
+        if (passedMission) {
+          if (modalTitle) modalTitle.textContent = "🏆 부스 미션 최종 대성공!";
+          if (modalSubtitle) modalSubtitle.textContent = `축하합니다! 5문제 중 총 ${gameState.successCount}문제를 맞춰 합격 기준(${gameState.passTarget}회)을 돌파했습니다!`;
+          if (modalIcon) modalIcon.className = "fa-solid fa-stamp";
+          if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
+          
+          if (stampBadge) stampBadge.className = "w-14 h-14 rounded-full border-2 border-dashed border-emerald-500 text-emerald-600 flex flex-col items-center justify-center font-black rotate-[-12deg] shadow-md shadow-emerald-200 scale-110 transition-all";
+          if (stampStatusText) stampStatusText.textContent = "인증 도장 획득";
+          if (modalVerdictText) {
+            modalVerdictText.textContent = "AI FESTA 스탬프 확인 완료!";
+            modalVerdictText.className = "text-sm font-extrabold text-emerald-600";
+          }
+          if (modalAiComment) modalAiComment.textContent = `🤖 AI 총평: "놀라운 텔레파시 능력입니다! 운영 스태프에게 화면을 보여주고 도장을 받으세요!"`;
+          speakAI(`축하합니다! 총 ${gameState.successCount}문제를 맞춰 부스 스탬프를 획득하셨습니다!`);
+        } else {
+          if (modalTitle) modalTitle.textContent = "아쉬워요! 미션 미달성 😢";
+          if (modalSubtitle) modalSubtitle.textContent = `최종 ${gameState.successCount}회 성공으로 합격 기준인 ${gameState.passTarget}회에 미치지 못했습니다.`;
+          if (modalIcon) modalIcon.className = "fa-solid fa-rotate-left";
+          if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-rose-100 border border-rose-300 text-rose-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
+          
+          if (stampBadge) stampBadge.className = "w-14 h-14 rounded-full border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center font-bold rotate-0 opacity-40 grayscale";
+          if (stampStatusText) stampStatusText.textContent = "미달성";
+          if (modalVerdictText) {
+            modalVerdictText.textContent = `합격 기준: ${gameState.passTarget}회 이상 성공 필요`;
+            modalVerdictText.className = "text-sm font-bold text-rose-600";
+          }
+          if (modalAiComment) modalAiComment.textContent = `🤖 AI 총평: "다음엔 더 과감하고 단순한 핵심 외곽선으로 그려보세요!"`;
+          speakAI(`아쉽게도 ${gameState.successCount}개 성공으로 끝났어요. 다시 도전해주세요!`);
+        }
+
+        if (modalActionBtn) {
+          modalActionBtn.textContent = "새 참가자 처음부터 시작";
+          modalActionBtn.className = "flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold shadow-md shadow-emerald-200 transition text-sm";
+        }
+      } else {
+        if (modalVerdictText) {
+          modalVerdictText.textContent = `합격까지 남은 정답: ${Math.max(0, gameState.passTarget - gameState.successCount)}개`;
+          modalVerdictText.className = "text-sm font-semibold text-indigo-700";
+        }
+        
+        if (stampBadge) stampBadge.className = "w-14 h-14 rounded-full border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center font-bold opacity-40 grayscale";
+        if (stampStatusText) stampStatusText.textContent = `진행 중 (${gameState.currentRound}/5)`;
+
+        if (isSuccess) {
+          if (modalTitle) modalTitle.textContent = `R${gameState.currentRound} 텔레파시 성공! 🎉`;
+          if (modalSubtitle) modalSubtitle.textContent = `AI가 [${gameState.currentWordObj.word}]을(를) 맞췄습니다! (${elapsed}초 소요)`;
+          if (modalIcon) modalIcon.className = "fa-solid fa-check";
+          if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
+          if (modalAiComment) modalAiComment.textContent = `🤖 AI 코멘트: "빠르게 핵심 특징을 짚어주셔서 바로 알아봤어요!"`;
+          speakAI(`정답입니다! 다음 라운드로 이동해볼까요?`);
+        } else {
+          if (modalTitle) modalTitle.textContent = `R${gameState.currentRound} 시간 초과 ⏰`;
+          if (modalSubtitle) modalSubtitle.textContent = reason || `15초가 지났습니다. 정답은 [${gameState.currentWordObj.word}]이었습니다.`;
+          if (modalIcon) modalIcon.className = "fa-solid fa-clock";
+          if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 text-amber-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
+          if (modalAiComment) modalAiComment.textContent = `🤖 AI 코멘트: "다음 라운드에서는 더 과감하고 단순한 선으로 그려보세요!"`;
+          speakAI(`시간이 다 됐어요! 다음 문제에서 만회해봐요!`);
+        }
+
+        if (modalActionBtn) {
+          modalActionBtn.textContent = `다음 라운드 (${gameState.currentRound + 1}/${gameState.totalRounds}) 도전 ➔`;
+          modalActionBtn.className = "flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold shadow-md shadow-indigo-300 transition text-sm";
+        }
+      }
+
+      if (modal) modal.classList.remove("hidden");
+    }
+
+    const resultModal = document.getElementById("resultModal");
+    const modalActionBtn = document.getElementById("modalActionBtn");
+    const modalResetBtn = document.getElementById("modalResetBtn");
+
+    if (modalActionBtn) {
+      modalActionBtn.addEventListener("click", () => {
+        if (resultModal) resultModal.classList.add("hidden");
+        if (gameState.currentRound >= gameState.totalRounds) {
+          resetEntireChallenge(true);
+        } else {
+          gameState.currentRound++;
+          startWordPreview(gameState.currentRound);
+        }
+      });
+    }
+
+    if (modalResetBtn) {
+      modalResetBtn.addEventListener("click", () => {
+        if (resultModal) resultModal.classList.add("hidden");
+        resetEntireChallenge(true);
+      });
+    }
+
+    function resetEntireChallenge(showIntro = false) {
+      clearInterval(gameState.timerInterval);
+      clearInterval(gameState.analysisInterval);
+      clearInterval(gameState.previewInterval);
+
+      gameState.currentRound = 1;
+      gameState.successCount = 0;
+      gameState.roundResults = [];
+      gameState.usedWordsHistory = []; // 신규 참가자 세션 시 출제 단어 풀 초기화
+      gameState.status = "idle";
+      clearCanvasArea();
+      pickRandomWord();
+      renderRoundSlots();
+      updateScoreBanner();
+
+      updatePredictionsUI([
+        { name: "대기 중...", confidence: 0 },
+        { name: "-", confidence: 0 },
+        { name: "-", confidence: 0 }
+      ]);
+      updateAiSpeech("새로운 도전자를 환영합니다! [도전 시작하기]를 누르면 제시어가 안내됩니다.");
+
+      if (showIntro) {
+        const intro = document.getElementById("introModal");
+        if (intro) intro.classList.remove("hidden");
+      }
+    }
+
+    const introModal = document.getElementById("introModal");
+    const startExperienceBtn = document.getElementById("startExperienceBtn");
+    const showHowToBtn = document.getElementById("showHowToBtn");
+
+    if (startExperienceBtn) {
+      startExperienceBtn.addEventListener("click", () => {
+        if (introModal) introModal.classList.add("hidden");
+        // [도전 시작하기] 클릭 시 1라운드 5초 제시어 안내 화면 즉시 시작!
+        startWordPreview(1);
+      });
+    }
+
+    if (showHowToBtn) {
+      showHowToBtn.addEventListener("click", () => {
+        if (introModal) introModal.classList.remove("hidden");
+      });
+    }
+
+    // AI 원리 안내 팝업 바인딩
+    const aiConceptBtn = document.getElementById("aiConceptBtn");
+    const conceptModal = document.getElementById("conceptModal");
+    const closeConceptBtn = document.getElementById("closeConceptBtn");
+    const confirmConceptBtn = document.getElementById("confirmConceptBtn");
+
+    if (aiConceptBtn && conceptModal) {
+      aiConceptBtn.addEventListener("click", () => conceptModal.classList.remove("hidden"));
+    }
+    if (closeConceptBtn && conceptModal) {
+      closeConceptBtn.addEventListener("click", () => conceptModal.classList.add("hidden"));
+    }
+    if (confirmConceptBtn && conceptModal) {
+      confirmConceptBtn.addEventListener("click", () => conceptModal.classList.add("hidden"));
+    }
+
+    // 부스 운영자 설정 팝업 바인딩
+    const boothSettingsBtn = document.getElementById("boothSettingsBtn");
+    const boothSettingsModal = document.getElementById("boothSettingsModal");
+    const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+    const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+    const timeSetBtns = document.querySelectorAll(".time-set-btn");
+
+    if (boothSettingsBtn && boothSettingsModal) {
+      boothSettingsBtn.addEventListener("click", () => boothSettingsModal.classList.remove("hidden"));
+    }
+    if (closeSettingsBtn && boothSettingsModal) {
+      closeSettingsBtn.addEventListener("click", () => boothSettingsModal.classList.add("hidden"));
+    }
+
+    timeSetBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        timeSetBtns.forEach(b => {
+          b.className = "time-set-btn flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-200";
+        });
+        btn.className = "time-set-btn flex-1 py-1.5 rounded-lg bg-indigo-600 text-white font-bold shadow-xs";
+        gameState.maxTime = parseFloat(btn.getAttribute("data-time"));
+        gameState.timeLeft = gameState.maxTime;
+        const timeLeftLabel = document.getElementById("timeLeftLabel");
+        if (timeLeftLabel) timeLeftLabel.textContent = `${gameState.maxTime.toFixed(1)}s`;
+      });
+    });
+
+    if (saveSettingsBtn && boothSettingsModal) {
+      saveSettingsBtn.addEventListener("click", () => {
+        const modeRadio = document.querySelector('input[name="apiMode"]:checked');
+        if (modeRadio) gameState.apiMode = modeRadio.value;
+        
+        const totalRoundsVal = parseInt(document.getElementById("totalRoundsSelect")?.value, 10);
+        const passTargetVal = parseInt(document.getElementById("passTargetSelect")?.value, 10);
+        if (totalRoundsVal) gameState.totalRounds = totalRoundsVal;
+        if (passTargetVal) gameState.passTarget = passTargetVal;
+
+        boothSettingsModal.classList.add("hidden");
+        resetEntireChallenge(false);
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      resizeCanvas();
+      renderRoundSlots();
+      pickRandomWord();
+      updateScoreBanner();
+      updatePredictionsUI([
+        { name: "대기 중...", confidence: 0 },
+        { name: "-", confidence: 0 },
+        { name: "-", confidence: 0 }
+      ]);
+    });
+  </script>
+</body>
+</html>
