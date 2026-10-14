@@ -33,6 +33,21 @@
     .animate-scan {
       animation: scan-line 1.6s infinite linear;
     }
+    .pixelated {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    @keyframes confetti-fall {
+      0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 1; }
+      100% { transform: translate3d(var(--dx), 105vh, 0) rotate(var(--rot)); opacity: 0.9; }
+    }
+    .confetti-piece {
+      position: fixed;
+      top: 0;
+      z-index: 60;
+      pointer-events: none;
+      animation: confetti-fall var(--dur) cubic-bezier(.25,.6,.45,1) forwards;
+    }
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -77,6 +92,11 @@
           <span class="hidden md:inline" id="ttsLabel">AI 음성 ON</span>
         </button>
 
+        <button id="leaderboardBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-pink-50 hover:bg-pink-100 text-pink-700 text-xs font-semibold transition border border-pink-200" title="명예의 전당">
+          <i class="fa-solid fa-ranking-star"></i>
+          <span class="hidden sm:inline">명예의 전당</span>
+        </button>
+
         <button id="aiConceptBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition border border-indigo-200">
           <i class="fa-solid fa-brain"></i>
           <span class="hidden sm:inline">원리 알아보기</span>
@@ -97,7 +117,7 @@
         </div>
         <div class="text-xs">
           <span class="font-extrabold text-slate-800">부스 공식 미션:</span>
-          <span class="text-slate-600">5문제 중 <strong class="text-emerald-600 font-extrabold">4문제 이상</strong> 맞추면 스탬프 획득!</span>
+          <span class="text-slate-600"><span id="missionTotalText">5</span>문제 중 <strong class="text-emerald-600 font-extrabold"><span id="missionPassText">4</span>문제 이상</strong> 맞추면 스탬프 획득!</span>
           <span class="text-slate-400 mx-1 hidden sm:inline">|</span>
           <span class="text-[11px] text-slate-500">
             현재: <span id="currentScoreText" class="text-indigo-600 font-bold">0 / 5 성공</span> (남은 기회: <span id="remainingRoundsText" class="text-slate-800 font-bold">5회</span>)
@@ -211,6 +231,12 @@
       <div id="canvasWrapper" class="relative flex-1 w-full bg-white rounded-xl overflow-hidden mt-2 border border-slate-200 shadow-inner touch-none min-h-[300px]">
         <canvas id="sketchCanvas" class="w-full h-full block bg-white"></canvas>
         
+        <!-- AI가 실제로 입력받는 28×28 축소 그림 -->
+        <div id="aiEyeMini" class="hidden pointer-events-none absolute top-2 right-2 z-10 bg-white/90 border border-indigo-200 rounded-xl p-1.5 shadow-sm text-center">
+          <canvas id="aiEyeMiniCanvas" width="28" height="28" class="pixelated w-14 h-14 rounded-md border border-slate-200 bg-black"></canvas>
+          <div class="text-[9px] font-bold text-indigo-700 mt-0.5 leading-tight">AI의 눈<br><span class="font-mono text-slate-500">28×28</span></div>
+        </div>
+
         <!-- AI 분석 시 스캔 레이저 라인 -->
         <div id="scanLine" class="hidden pointer-events-none absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent shadow-[0_0_15px_#06b6d4] z-10 animate-scan"></div>
       </div>
@@ -341,7 +367,7 @@
   </div>
 
   <div id="resultModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden text-center animate-in fade-in zoom-in duration-200">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-y-auto max-h-[92vh] text-center animate-in fade-in zoom-in duration-200">
       
       <div id="modalIconContainer" class="w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md">
         <i id="modalIcon" class="fa-solid fa-trophy"></i>
@@ -374,6 +400,21 @@
         <div id="modalAiComment" class="mt-2.5 pt-2 border-t border-slate-200 text-xs text-indigo-800 bg-indigo-50/70 p-2 rounded-lg border border-indigo-100">
           🤖 AI 판독 코멘트: "특징 윤곽선을 감지했습니다!"
         </div>
+
+        <!-- AI의 눈: 실제 CNN이 내 그림에서 뽑아낸 특징 지도 -->
+        <div id="modalAiEye" class="hidden mt-2.5 pt-2 border-t border-slate-200"></div>
+      </div>
+
+      <!-- 최종 라운드 후 명예의 전당 등록 -->
+      <div id="leaderboardEntry" class="hidden bg-pink-50/70 border border-pink-200 rounded-2xl p-3 mb-4 text-left">
+        <div class="text-xs font-extrabold text-pink-800 mb-1.5 flex items-center gap-1.5">
+          <i class="fa-solid fa-ranking-star"></i> 명예의 전당에 이름 남기기
+        </div>
+        <div class="flex gap-2">
+          <input id="leaderboardNameInput" type="text" maxlength="10" autocomplete="off" placeholder="닉네임 (최대 10자)" class="flex-1 min-w-0 bg-white border border-pink-200 rounded-xl px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-pink-400" style="user-select: text; -webkit-user-select: text;">
+          <button id="leaderboardSaveBtn" class="px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold transition shrink-0">기록 저장</button>
+        </div>
+        <p id="leaderboardEntryStatus" class="text-[11px] text-pink-700 mt-1.5">이 기기의 순위표에만 저장됩니다.</p>
       </div>
 
       <div class="flex gap-2">
@@ -388,9 +429,30 @@
     </div>
   </div>
 
+  <!-- 명예의 전당 팝업 -->
+  <div id="leaderboardModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative text-left max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-pink-100 text-pink-600 flex items-center justify-center">
+            <i class="fa-solid fa-ranking-star"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">명예의 전당 TOP 10</h3>
+            <p class="text-[11px] text-slate-500">정답 수가 많을수록, 같으면 총 소요 시간이 짧을수록 높은 순위!</p>
+          </div>
+        </div>
+        <button id="closeLeaderboardBtn" class="text-slate-400 hover:text-slate-700 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div id="leaderboardList" class="overflow-y-auto space-y-1.5 text-sm"></div>
+    </div>
+  </div>
+
   <!-- AI 원리 설명 팝업 -->
   <div id="conceptModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200 max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
@@ -421,6 +483,49 @@
             '안경'은 두 개의 동그라미와 가로선 하나만으로도 AI가 95% 이상 확신합니다. 사물의 가장 본질적인 핵심 윤곽선을 포착하는 것이 Vision AI의 핵심 지능입니다!
           </p>
         </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <h4 class="font-bold text-emerald-700 mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-diagram-project"></i> 3. CNN이 그림을 읽는 5단계
+          </h4>
+          <div class="grid grid-cols-5 gap-1 text-center">
+            <div class="bg-white rounded-lg border border-slate-200 p-1.5">
+              <div class="text-lg">✏️</div>
+              <div class="text-[10px] font-bold text-slate-800 leading-tight">내 그림</div>
+              <div class="text-[9px] text-slate-500 leading-tight mt-0.5">수십만 픽셀</div>
+            </div>
+            <div class="bg-white rounded-lg border border-slate-200 p-1.5">
+              <div class="text-lg">🔲</div>
+              <div class="text-[10px] font-bold text-slate-800 leading-tight">28×28 축소</div>
+              <div class="text-[9px] text-slate-500 leading-tight mt-0.5">784칸 흑백</div>
+            </div>
+            <div class="bg-white rounded-lg border border-indigo-200 p-1.5">
+              <div class="text-lg">🔍</div>
+              <div class="text-[10px] font-bold text-indigo-700 leading-tight">합성곱 필터</div>
+              <div class="text-[9px] text-slate-500 leading-tight mt-0.5">선·모서리 찾기</div>
+            </div>
+            <div class="bg-white rounded-lg border border-purple-200 p-1.5">
+              <div class="text-lg">🧩</div>
+              <div class="text-[10px] font-bold text-purple-700 leading-tight">특징 조합</div>
+              <div class="text-[9px] text-slate-500 leading-tight mt-0.5">원·귀·바퀴 모양</div>
+            </div>
+            <div class="bg-white rounded-lg border border-pink-200 p-1.5">
+              <div class="text-lg">🏆</div>
+              <div class="text-[10px] font-bold text-pink-700 leading-tight">345종 분류</div>
+              <div class="text-[9px] text-slate-500 leading-tight mt-0.5">확률 Top 3</div>
+            </div>
+          </div>
+          <p class="mt-2">
+            앞쪽 층의 필터는 <strong>짧은 선과 방향</strong>만 찾고, 뒤쪽 층으로 갈수록 그것들을 묶어 <strong>'동그라미 두 개 + 가로선' 같은 큰 패턴</strong>을 알아봅니다. 그래서 색칠이나 명암보다 <strong>핵심 윤곽선</strong>이 중요해요!
+          </p>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <h4 class="font-bold text-cyan-700 mb-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-eye"></i> 4. 지금 내 그림, AI 눈에는 이렇게 보여요
+          </h4>
+          <div id="conceptAiEye" class="text-[11px] text-slate-500">캔버스에 그림을 그린 뒤 이 창을 열면, 실제 CNN이 뽑아낸 특징 지도를 보여드립니다.</div>
+        </div>
       </div>
 
       <div class="mt-4 text-center">
@@ -433,7 +538,7 @@
 
   <!-- 부스 운영자 설정 모달 -->
   <div id="boothSettingsModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200">
+    <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 shadow-2xl relative text-left animate-in fade-in zoom-in duration-200 max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
         <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
           <i class="fa-solid fa-sliders text-indigo-600"></i> 부스 운영자 옵션
@@ -477,7 +582,7 @@
         <div>
           <label class="block font-bold text-slate-700 mb-1">제시어 난이도 카테고리</label>
           <select id="wordCategorySelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 outline-none">
-            <option value="all">전체 (사물, 동물, 음식, 탈것, 가전 등 80여 종 랜덤)</option>
+            <option value="all">전체 (사물, 동물, 음식, 탈것, 가전 등 110여 종 랜덤)</option>
             <option value="easy">초등/기초 (안경, 사과, 나무, 모자, 하트 등)</option>
             <option value="animals">동물/자연 (고양이, 강아지, 코끼리, 나비, 무지개 등)</option>
             <option value="objects">사물/탈것/가전 (비행기, 스마트폰, 피아노, 피자 등)</option>
@@ -486,20 +591,30 @@
 
         <div class="pt-2 border-t border-slate-100">
           <label class="block font-bold text-slate-700 mb-1">API 모드 선택</label>
-          <div class="flex items-center gap-3">
+          <div class="flex flex-col gap-1.5">
             <label class="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name="apiMode" value="gemini" checked class="text-indigo-600">
-              <span class="text-slate-800">Gemini Vision (온라인)</span>
+              <span class="text-slate-800">Gemini Vision (온라인 · 모든 제시어)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" name="apiMode" value="doodlenet" class="text-indigo-600">
+              <span class="text-slate-800">DoodleNet CNN (브라우저 내장 · Quick, Draw! 345종)</span>
             </label>
             <label class="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name="apiMode" value="smart_mock" class="text-indigo-600">
-              <span class="text-slate-800">스마트 시뮬레이션 (오프라인)</span>
+              <span class="text-slate-800">스마트 시뮬레이션 (진짜 AI 아님 · 비상용)</span>
             </label>
           </div>
+          <p id="doodleNetStatus" class="text-[11px] text-slate-500 mt-1">DoodleNet 모델 준비 중...</p>
           <label class="block font-bold text-slate-700 mt-3 mb-1">Gemini API 키</label>
           <input id="geminiApiKeyInput" type="password" autocomplete="off" placeholder="API 키 붙여넣기 (이 기기에만 저장됩니다)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 outline-none" style="user-select: text; -webkit-user-select: text;">
           <p id="geminiApiKeyStatus" class="text-[11px] text-slate-500 mt-1">비워 두면 부스 공용 AI 서버를 사용합니다. 개인 키로 직접 호출하려면 입력하세요.</p>
         </div>
+      </div>
+
+      <div class="pt-2 mt-3 border-t border-slate-100 text-xs flex items-center justify-between gap-2">
+        <span class="text-slate-500">명예의 전당 기록 (이 기기 저장)</span>
+        <button id="clearLeaderboardBtn" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold">기록 초기화</button>
       </div>
 
       <div class="mt-4 flex justify-end">
@@ -510,91 +625,135 @@
     </div>
   </div>
 
+  <!-- TensorFlow.js: 브라우저 안에서 DoodleNet CNN 실행 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="model/doodlenet/labels_ko.js"></script>
   <script>
     const WORD_DATABASE = [
       // 1. 기초 / 쉬운 사물 (초등/가족 친화)
-      { word: "안경", category: "사물", level: "easy", hint: "두 개의 동그란 알과 가운데 연결 다리를 그려보세요!", keywords: ["안경", "선글라스", "glasses", "spectacles"] },
-      { word: "사과", category: "음식", level: "easy", hint: "동그란 모양 위에 꼭지와 앙증맞은 잎사귀 하나!", keywords: ["사과", "apple", "과일"] },
-      { word: "나무", category: "자연", level: "easy", hint: "곧게 뻗은 기둥과 뭉게구름처럼 둥근 나뭇잎!", keywords: ["나무", "tree", "숲"] },
-      { word: "모자", category: "패션", level: "easy", hint: "머리를 덮는 반원 뚜껑과 챙을 그려보세요!", keywords: ["모자", "hat", "cap", "야구모자"] },
-      { word: "시계", category: "사물", level: "easy", hint: "동그란 테두리 안에 시침과 분침 두 개를 그어주세요!", keywords: ["시계", "손목시계", "clock", "watch"] },
-      { word: "우산", category: "사물", level: "easy", hint: "반원형 덮개와 아래로 둥글게 꺾인 지팡이 손잡이!", keywords: ["우산", "양산", "umbrella"] },
-      { word: "별", category: "자연", level: "easy", hint: "다섯 갈래로 뾰족뾰족 뻗은 오각 별을 그려요!", keywords: ["별", "스타", "star"] },
-      { word: "하트", category: "기호", level: "easy", hint: "사랑을 표현하는 두 개의 봉긋한 곡선과 뾰족한 끝!", keywords: ["하트", "heart", "사랑"] },
-      { word: "달", category: "자연", level: "easy", hint: "날렵하게 휘어진 예쁜 초승달 모양을 그려보세요!", keywords: ["달", "초승달", "moon", "crescent"] },
-      { word: "태양", category: "자연", level: "easy", hint: "동그란 원 주위로 사방으로 뻗어나가는 햇살 선들!", keywords: ["태양", "해", "sun", "sunshine"] },
-      { word: "구름", category: "자연", level: "easy", hint: "하늘에 둥둥 떠 있는 몽실몽실한 솜사탕 모양!", keywords: ["구름", "cloud"] },
-      { word: "꽃", category: "자연", level: "easy", hint: "가운데 둥근 수술과 둥글둥글한 꽃잎들을 둘러줘요!", keywords: ["꽃", "flower", "화초"] },
-      { word: "집", category: "건축", level: "easy", hint: "세모난 지붕과 네모난 벽, 그리고 문과 창문!", keywords: ["집", "house", "home", "건물"] },
-      { word: "눈사람", category: "자연", level: "easy", hint: "크고 작은 눈 뭉치 두 개와 단추, 나뭇가지 팔!", keywords: ["눈사람", "snowman"] },
-      { word: "컵", category: "사물", level: "easy", hint: "둥근 원통형 몸통 옆에 손잡이 귀를 달아주세요!", keywords: ["컵", "머그컵", "cup", "mug"] },
-      { word: "책", category: "사물", level: "easy", hint: "펼쳐진 두 면이나 두툼한 직사각형 책 표지!", keywords: ["책", "교과서", "book"] },
-      { word: "풍선", category: "사물", level: "easy", hint: "달걀형 풍선 밑에 매듭과 구불구불한 실 한 가닥!", keywords: ["풍선", "balloon"] },
-      { word: "계란프라이", category: "음식", level: "easy", hint: "구불구불한 흰자 테두리 한가운데 노른자 쏙!", keywords: ["계란", "달걀", "계란후라이", "egg", "fried egg"] },
+      { word: "안경", category: "사물", level: "easy", hint: "두 개의 동그란 알과 가운데 연결 다리를 그려보세요!", keywords: ["안경", "선글라스", "glasses", "spectacles"], qd: ["eyeglasses"] },
+      { word: "사과", category: "음식", level: "easy", hint: "동그란 모양 위에 꼭지와 앙증맞은 잎사귀 하나!", keywords: ["사과", "apple", "과일"], qd: ["apple"] },
+      { word: "나무", category: "자연", level: "easy", hint: "곧게 뻗은 기둥과 뭉게구름처럼 둥근 나뭇잎!", keywords: ["나무", "tree", "숲"], qd: ["tree"] },
+      { word: "모자", category: "패션", level: "easy", hint: "머리를 덮는 반원 뚜껑과 챙을 그려보세요!", keywords: ["모자", "hat", "cap", "야구모자"], qd: ["hat"] },
+      { word: "시계", category: "사물", level: "easy", hint: "동그란 테두리 안에 시침과 분침 두 개를 그어주세요!", keywords: ["시계", "손목시계", "clock", "watch"], qd: ["clock", "alarm_clock", "wristwatch"] },
+      { word: "우산", category: "사물", level: "easy", hint: "반원형 덮개와 아래로 둥글게 꺾인 지팡이 손잡이!", keywords: ["우산", "양산", "umbrella"], qd: ["umbrella"] },
+      { word: "별", category: "자연", level: "easy", hint: "다섯 갈래로 뾰족뾰족 뻗은 오각 별을 그려요!", keywords: ["별", "스타", "star"], qd: ["star"] },
+      { word: "하트", category: "기호", level: "easy", hint: "사랑을 표현하는 두 개의 봉긋한 곡선과 뾰족한 끝!", keywords: ["하트", "heart", "사랑"], qd: [] },
+      { word: "달", category: "자연", level: "easy", hint: "날렵하게 휘어진 예쁜 초승달 모양을 그려보세요!", keywords: ["달", "초승달", "moon", "crescent"], qd: ["moon"] },
+      { word: "태양", category: "자연", level: "easy", hint: "동그란 원 주위로 사방으로 뻗어나가는 햇살 선들!", keywords: ["태양", "해", "sun", "sunshine"], qd: ["sun"] },
+      { word: "구름", category: "자연", level: "easy", hint: "하늘에 둥둥 떠 있는 몽실몽실한 솜사탕 모양!", keywords: ["구름", "cloud"], qd: ["cloud"] },
+      { word: "꽃", category: "자연", level: "easy", hint: "가운데 둥근 수술과 둥글둥글한 꽃잎들을 둘러줘요!", keywords: ["꽃", "flower", "화초"], qd: ["flower"] },
+      { word: "집", category: "건축", level: "easy", hint: "세모난 지붕과 네모난 벽, 그리고 문과 창문!", keywords: ["집", "house", "home", "건물"], qd: ["house"] },
+      { word: "눈사람", category: "자연", level: "easy", hint: "크고 작은 눈 뭉치 두 개와 단추, 나뭇가지 팔!", keywords: ["눈사람", "snowman"], qd: ["snowman"] },
+      { word: "컵", category: "사물", level: "easy", hint: "둥근 원통형 몸통 옆에 손잡이 귀를 달아주세요!", keywords: ["컵", "머그컵", "cup", "mug"], qd: ["cup", "coffee_cup", "mug"] },
+      { word: "책", category: "사물", level: "easy", hint: "펼쳐진 두 면이나 두툼한 직사각형 책 표지!", keywords: ["책", "교과서", "book"], qd: ["book"] },
+      { word: "풍선", category: "사물", level: "easy", hint: "달걀형 풍선 밑에 매듭과 구불구불한 실 한 가닥!", keywords: ["풍선", "balloon"], qd: [] },
+      { word: "계란프라이", category: "음식", level: "easy", hint: "구불구불한 흰자 테두리 한가운데 노른자 쏙!", keywords: ["계란", "달걀", "계란후라이", "egg", "fried egg"], qd: [] },
 
       // 2. 동물 / 생물 (인기 카테고리)
-      { word: "고양이", category: "동물", level: "animals", hint: "뾰족한 세모 귀 두 개와 양볼에 뻗은 수염!", keywords: ["고양이", "야옹이", "cat", "kitty"] },
-      { word: "강아지", category: "동물", level: "animals", hint: "아래로 축 늘어진 귀나 쫑긋한 귀, 혀를 쏙 내민 입!", keywords: ["강아지", "개", "dog", "puppy"] },
-      { word: "물고기", category: "생물", level: "animals", hint: "타원형 몸통 끝에 삼각 꼬리지느러미와 눈 하나!", keywords: ["물고기", "생선", "fish"] },
-      { word: "나비", category: "생물", level: "animals", hint: "가운데 가느다란 몸통과 양옆 대칭의 날개 네 장!", keywords: ["나비", "butterfly"] },
-      { word: "토끼", category: "동물", level: "animals", hint: "머리 위로 길쭉하게 솟아오른 두 개의 긴 귀!", keywords: ["토끼", "rabbit", "bunny"] },
-      { word: "코끼리", category: "동물", level: "animals", hint: "바닥까지 길게 늘어진 코와 펄럭이는 부채 같은 큰 귀!", keywords: ["코끼리", "elephant"] },
-      { word: "기린", category: "동물", level: "animals", hint: "위로 아주 길쭉하게 뻗은 목과 얼룩무늬 패턴!", keywords: ["기린", "giraffe"] },
-      { word: "사자", category: "동물", level: "animals", hint: "얼굴 주위를 둥글게 둘러싼 웅장하고 풍성한 갈기!", keywords: ["사자", "lion"] },
-      { word: "원숭이", category: "동물", level: "animals", hint: "동글동글한 얼굴형과 양옆으로 툭 튀어나온 둥근 귀!", keywords: ["원숭이", "monkey"] },
-      { word: "문어", category: "생물", level: "animals", hint: "동그란 머리 아래로 꼬불꼬불 뻗은 문어 다리들!", keywords: ["문어", "octopus"] },
-      { word: "게", category: "생물", level: "animals", hint: "양옆으로 솟은 큼직한 집게발 두 개와 다리들!", keywords: ["게", "꽃게", "crab"] },
-      { word: "거북이", category: "생물", level: "animals", hint: "육각형 무늬가 있는 볼록한 등껍질과 빼꼼 나온 머리!", keywords: ["거북이", "거북", "turtle"] },
-      { word: "새", category: "생물", level: "animals", hint: "뾰족한 부리와 날개, 앙증맞은 꼬리깃털!", keywords: ["새", "참새", "bird"] },
-      { word: "오리", category: "동물", level: "animals", hint: "넓적하고 납작한 부리와 통통한 꼬리깃털!", keywords: ["오리", "duck"] },
-      { word: "개구리", category: "생물", level: "animals", hint: "머리 위로 볼록 튀어나온 두 눈과 넙적한 입!", keywords: ["개구리", "frog"] },
-      { word: "뱀", category: "생물", level: "animals", hint: "S자로 구불구불 기어가는 길쭉한 몸과 갈라진 혀!", keywords: ["뱀", "snake"] },
-      { word: "달팽이", category: "생물", level: "animals", hint: "돌돌 말린 소용돌이 등껍질과 더듬이 두 개!", keywords: ["달팽이", "snail"] },
-      { word: "상어", category: "생물", level: "animals", hint: "등 위에 우뚝 솟은 삼각형 지느러미와 날카로운 이빨!", keywords: ["상어", "shark"] },
+      { word: "고양이", category: "동물", level: "animals", hint: "뾰족한 세모 귀 두 개와 양볼에 뻗은 수염!", keywords: ["고양이", "야옹이", "cat", "kitty"], qd: ["cat"] },
+      { word: "강아지", category: "동물", level: "animals", hint: "아래로 축 늘어진 귀나 쫑긋한 귀, 혀를 쏙 내민 입!", keywords: ["강아지", "개", "dog", "puppy"], qd: ["dog"] },
+      { word: "물고기", category: "생물", level: "animals", hint: "타원형 몸통 끝에 삼각 꼬리지느러미와 눈 하나!", keywords: ["물고기", "생선", "fish"], qd: ["fish"] },
+      { word: "나비", category: "생물", level: "animals", hint: "가운데 가느다란 몸통과 양옆 대칭의 날개 네 장!", keywords: ["나비", "butterfly"], qd: ["butterfly"] },
+      { word: "토끼", category: "동물", level: "animals", hint: "머리 위로 길쭉하게 솟아오른 두 개의 긴 귀!", keywords: ["토끼", "rabbit", "bunny"], qd: ["rabbit"] },
+      { word: "코끼리", category: "동물", level: "animals", hint: "바닥까지 길게 늘어진 코와 펄럭이는 부채 같은 큰 귀!", keywords: ["코끼리", "elephant"], qd: ["elephant"] },
+      { word: "기린", category: "동물", level: "animals", hint: "위로 아주 길쭉하게 뻗은 목과 얼룩무늬 패턴!", keywords: ["기린", "giraffe"], qd: ["giraffe"] },
+      { word: "사자", category: "동물", level: "animals", hint: "얼굴 주위를 둥글게 둘러싼 웅장하고 풍성한 갈기!", keywords: ["사자", "lion"], qd: ["lion"] },
+      { word: "원숭이", category: "동물", level: "animals", hint: "동글동글한 얼굴형과 양옆으로 툭 튀어나온 둥근 귀!", keywords: ["원숭이", "monkey"], qd: ["monkey"] },
+      { word: "문어", category: "생물", level: "animals", hint: "동그란 머리 아래로 꼬불꼬불 뻗은 문어 다리들!", keywords: ["문어", "octopus"], qd: ["octopus"] },
+      { word: "게", category: "생물", level: "animals", hint: "양옆으로 솟은 큼직한 집게발 두 개와 다리들!", keywords: ["게", "꽃게", "crab"], qd: ["crab"] },
+      { word: "거북이", category: "생물", level: "animals", hint: "육각형 무늬가 있는 볼록한 등껍질과 빼꼼 나온 머리!", keywords: ["거북이", "거북", "turtle"], qd: ["sea_turtle"] },
+      { word: "새", category: "생물", level: "animals", hint: "뾰족한 부리와 날개, 앙증맞은 꼬리깃털!", keywords: ["새", "참새", "bird"], qd: ["bird"] },
+      { word: "오리", category: "동물", level: "animals", hint: "넓적하고 납작한 부리와 통통한 꼬리깃털!", keywords: ["오리", "duck"], qd: ["duck"] },
+      { word: "개구리", category: "생물", level: "animals", hint: "머리 위로 볼록 튀어나온 두 눈과 넙적한 입!", keywords: ["개구리", "frog"], qd: ["frog"] },
+      { word: "뱀", category: "생물", level: "animals", hint: "S자로 구불구불 기어가는 길쭉한 몸과 갈라진 혀!", keywords: ["뱀", "snake"], qd: ["snake"] },
+      { word: "달팽이", category: "생물", level: "animals", hint: "돌돌 말린 소용돌이 등껍질과 더듬이 두 개!", keywords: ["달팽이", "snail"], qd: ["snail"] },
+      { word: "상어", category: "생물", level: "animals", hint: "등 위에 우뚝 솟은 삼각형 지느러미와 날카로운 이빨!", keywords: ["상어", "shark"], qd: ["shark"] },
 
       // 3. 음식 / 디저트
-      { word: "피자", category: "음식", level: "objects", hint: "부채꼴 세모 조각 위에 동글동글 페퍼로니 토핑!", keywords: ["피자", "pizza"] },
-      { word: "햄버거", category: "음식", level: "objects", hint: "둥근 번 빵 사이에 두툼한 패티와 양상추 층!", keywords: ["햄버거", "버거", "hamburger", "burger"] },
-      { word: "아이스크림", category: "음식", level: "easy", hint: "세모난 와플 콘 위에 둥글게 얹혀진 스쿱!", keywords: ["아이스크림", "icecream", "ice cream"] },
-      { word: "케이크", category: "음식", level: "objects", hint: "원통형 케이크 몸통과 위에 꽂힌 불붙은 촛불!", keywords: ["케이크", "생일케이크", "cake"] },
-      { word: "바나나", category: "음식", level: "easy", hint: "노랗게 활처럼 완만하게 휘어진 길쭉한 곡선!", keywords: ["바나나", "banana"] },
-      { word: "포도", category: "음식", level: "easy", hint: "역삼각형 모양으로 올망졸망 뭉쳐있는 포도알들!", keywords: ["포도", "grape", "grapes"] },
-      { word: "수박", category: "음식", level: "easy", hint: "세모난 수박 조각에 박힌 까만 수박씨들!", keywords: ["수박", "watermelon"] },
-      { word: "사탕", category: "음식", level: "easy", hint: "동그란 막대사탕이나 양끝이 꼬인 포장 사탕!", keywords: ["사탕", "캔디", "candy", "lollipop"] },
-      { word: "도넛", category: "음식", level: "easy", hint: "가운데 뻥 뚫린 튜브 모양의 둥근 링과 글레이즈!", keywords: ["도넛", "도너츠", "donut", "doughnut"] },
-      { word: "김밥", category: "음식", level: "objects", hint: "둥근 단면 안에 당근, 단무지 등 알록달록 속재료!", keywords: ["김밥", "gimbap", "kimbap"] },
-      { word: "프렌치프라이", category: "음식", level: "objects", hint: "상자 안에 길쭉길쭉 꽂혀있는 감자튀김 막대들!", keywords: ["감자튀김", "프렌치프라이", "fries", "french fries"] },
+      { word: "피자", category: "음식", level: "objects", hint: "부채꼴 세모 조각 위에 동글동글 페퍼로니 토핑!", keywords: ["피자", "pizza"], qd: ["pizza"] },
+      { word: "햄버거", category: "음식", level: "objects", hint: "둥근 번 빵 사이에 두툼한 패티와 양상추 층!", keywords: ["햄버거", "버거", "hamburger", "burger"], qd: ["hamburger"] },
+      { word: "아이스크림", category: "음식", level: "easy", hint: "세모난 와플 콘 위에 둥글게 얹혀진 스쿱!", keywords: ["아이스크림", "icecream", "ice cream"], qd: ["ice_cream"] },
+      { word: "케이크", category: "음식", level: "objects", hint: "원통형 케이크 몸통과 위에 꽂힌 불붙은 촛불!", keywords: ["케이크", "생일케이크", "cake"], qd: ["cake", "birthday_cake"] },
+      { word: "바나나", category: "음식", level: "easy", hint: "노랗게 활처럼 완만하게 휘어진 길쭉한 곡선!", keywords: ["바나나", "banana"], qd: ["banana"] },
+      { word: "포도", category: "음식", level: "easy", hint: "역삼각형 모양으로 올망졸망 뭉쳐있는 포도알들!", keywords: ["포도", "grape", "grapes"], qd: ["grapes"] },
+      { word: "수박", category: "음식", level: "easy", hint: "세모난 수박 조각에 박힌 까만 수박씨들!", keywords: ["수박", "watermelon"], qd: ["watermelon"] },
+      { word: "사탕", category: "음식", level: "easy", hint: "동그란 막대사탕이나 양끝이 꼬인 포장 사탕!", keywords: ["사탕", "캔디", "candy", "lollipop"], qd: ["lollipop"] },
+      { word: "도넛", category: "음식", level: "easy", hint: "가운데 뻥 뚫린 튜브 모양의 둥근 링과 글레이즈!", keywords: ["도넛", "도너츠", "donut", "doughnut"], qd: ["donut"] },
+      { word: "김밥", category: "음식", level: "objects", hint: "둥근 단면 안에 당근, 단무지 등 알록달록 속재료!", keywords: ["김밥", "gimbap", "kimbap"], qd: [] },
+      { word: "프렌치프라이", category: "음식", level: "objects", hint: "상자 안에 길쭉길쭉 꽂혀있는 감자튀김 막대들!", keywords: ["감자튀김", "프렌치프라이", "fries", "french fries"], qd: [] },
 
       // 4. 탈것 / 교통수단
-      { word: "비행기", category: "탈것", level: "objects", hint: "길쭉한 원통형 동체와 양옆 큰 날개, 수직 꼬리날개!", keywords: ["비행기", "airplane", "plane", "여객기"] },
-      { word: "자동차", category: "탈것", level: "objects", hint: "동그란 두 바퀴 위에 네모난 차체와 창문!", keywords: ["자동차", "차", "car", "승용차"] },
-      { word: "자전거", category: "탈것", level: "objects", hint: "앞뒤 두 개의 둥근 바퀴와 다이아몬드 프레임, 손잡이!", keywords: ["자전거", "bicycle", "bike"] },
-      { word: "배", category: "탈것", level: "objects", hint: "물 위에 뜬 완만한 곡선의 선체와 펄럭이는 돛!", keywords: ["배", "보트", "선박", "ship", "boat", "yacht"] },
-      { word: "로켓", category: "탈것", level: "objects", hint: "원뿔형 탄두에 아래로 불꽃을 뿜어내는 우주선!", keywords: ["로켓", "우주선", "rocket", "spaceship"] },
-      { word: "기차", category: "탈것", level: "objects", hint: "굴뚝에서 연기가 나는 기관차와 연달아 붙은 네모 객차!", keywords: ["기차", "열차", "train", "기관차"] },
-      { word: "헬리콥터", category: "탈것", level: "objects", hint: "둥근 기체 지붕 위에서 빠르게 도는 대형 프로펠러!", keywords: ["헬리콥터", "헬기", "helicopter"] },
-      { word: "경찰차", category: "탈것", level: "objects", hint: "자동차 지붕 한가운데 번쩍이는 반원형 경광등!", keywords: ["경찰차", "police car", "순찰차"] },
+      { word: "비행기", category: "탈것", level: "objects", hint: "길쭉한 원통형 동체와 양옆 큰 날개, 수직 꼬리날개!", keywords: ["비행기", "airplane", "plane", "여객기"], qd: ["airplane"] },
+      { word: "자동차", category: "탈것", level: "objects", hint: "동그란 두 바퀴 위에 네모난 차체와 창문!", keywords: ["자동차", "차", "car", "승용차"], qd: ["car"] },
+      { word: "자전거", category: "탈것", level: "objects", hint: "앞뒤 두 개의 둥근 바퀴와 다이아몬드 프레임, 손잡이!", keywords: ["자전거", "bicycle", "bike"], qd: ["bicycle"] },
+      { word: "배", category: "탈것", level: "objects", hint: "물 위에 뜬 완만한 곡선의 선체와 펄럭이는 돛!", keywords: ["배", "보트", "선박", "ship", "boat", "yacht"], qd: ["sailboat", "cruise_ship", "speedboat", "canoe"] },
+      { word: "로켓", category: "탈것", level: "objects", hint: "원뿔형 탄두에 아래로 불꽃을 뿜어내는 우주선!", keywords: ["로켓", "우주선", "rocket", "spaceship"], qd: [] },
+      { word: "기차", category: "탈것", level: "objects", hint: "굴뚝에서 연기가 나는 기관차와 연달아 붙은 네모 객차!", keywords: ["기차", "열차", "train", "기관차"], qd: ["train"] },
+      { word: "헬리콥터", category: "탈것", level: "objects", hint: "둥근 기체 지붕 위에서 빠르게 도는 대형 프로펠러!", keywords: ["헬리콥터", "헬기", "helicopter"], qd: ["helicopter"] },
+      { word: "경찰차", category: "탈것", level: "objects", hint: "자동차 지붕 한가운데 번쩍이는 반원형 경광등!", keywords: ["경찰차", "police car", "순찰차"], qd: ["police_car"] },
 
       // 5. 악기 / 사물 / 가전 / 생활 도구
-      { word: "피아노", category: "악기", level: "objects", hint: "직사각형 건반 덮개와 흑백 건반 줄무늬!", keywords: ["피아노", "piano", "건반"] },
-      { word: "기타", category: "악기", level: "objects", hint: "조롱박 모양의 통과 길쭉한 넥, 팽팽한 줄들!", keywords: ["기타", "guitar", "통기타"] },
-      { word: "드럼", category: "악기", level: "objects", hint: "원통형 북과 양옆에 교차된 두 개의 드럼 스틱!", keywords: ["드럼", "북", "drum"] },
-      { word: "가위", category: "도구", level: "objects", hint: "가운데 축을 중심으로 X자로 교차된 날과 두 손잡이 구멍!", keywords: ["가위", "scissors"] },
-      { word: "선풍기", category: "가전", level: "objects", hint: "둥근 안전망 속에 회전하는 3장의 날개와 받침대!", keywords: ["선풍기", "fan"] },
-      { word: "스마트폰", category: "가전", level: "objects", hint: "모서리가 둥근 직사각형 화면과 상단 카메라 렌즈!", keywords: ["스마트폰", "휴대폰", "핸드폰", "phone", "smartphone"] },
-      { word: "텔레비전", category: "가전", level: "objects", hint: "큼직한 사각형 화면과 V자 안테나 또는 스탠드!", keywords: ["텔레비전", "TV", "티비", "television"] },
-      { word: "컴퓨터", category: "가전", level: "objects", hint: "모니터 화면과 아래 네모난 키보드 자판!", keywords: ["컴퓨터", "모니터", "computer", "pc"] },
-      { word: "열쇠", category: "사물", level: "easy", hint: "둥근 머리 고리와 길쭉한 자루 끝의 톱니 홈!", keywords: ["열쇠", "키", "key"] },
-      { word: "전등", category: "사물", level: "easy", hint: "둥근 전구 유리알과 아래쪽 나사산 소켓!", keywords: ["전구", "전등", "lightbulb", "lamp"] },
-      { word: "연필", category: "도구", level: "easy", hint: "길쭉한 육각 몸통과 뾰족하게 깎인 심, 지우개 끝!", keywords: ["연필", "pencil"] },
-      { word: "촛불", category: "사물", level: "easy", hint: "원통형 양초 기둥과 일렁이며 타오르는 물방울 불꽃!", keywords: ["촛불", "양초", "candle"] },
-      { word: "다이아몬드", category: "사물", level: "easy", hint: "윗면은 평평하고 아랫면은 역삼각형으로 깎인 보석!", keywords: ["다이아몬드", "보석", "diamond", "gem"] },
-      { word: "칫솔", category: "도구", level: "easy", hint: "길쭉한 손잡이 머리에 오밀조밀 심겨진 칫솔모!", keywords: ["칫솔", "toothbrush"] },
-      { word: "신발", category: "패션", level: "easy", hint: "발목 입구와 바닥 창, 둥근 앞코가 돋보이는 신발!", keywords: ["신발", "운동화", "구두", "shoes", "sneakers"] },
-      { word: "축구공", category: "스포츠", level: "objects", hint: "둥근 원 안에 그려진 오각형과 육각형 가죽 무늬!", keywords: ["축구공", "soccer", "football"] },
-      { word: "야구배트", category: "스포츠", level: "objects", hint: "손잡이는 가늘고 끝으로 갈수록 두꺼워지는 방망이!", keywords: ["야구배트", "야구방망이", "bat", "baseball"] },
-      { word: "카메라", category: "사물", level: "objects", hint: "직사각형 바디 한가운데 볼록 솟은 둥근 렌즈와 셔터!", keywords: ["카메라", "camera"] },
-      { word: "헤드폰", category: "사물", level: "objects", hint: "머리 위를 둥글게 잇는 헤드밴드와 양쪽 푹신한 이어컵!", keywords: ["헤드폰", "headphones", "헤드셋"] }
+      { word: "피아노", category: "악기", level: "objects", hint: "직사각형 건반 덮개와 흑백 건반 줄무늬!", keywords: ["피아노", "piano", "건반"], qd: ["piano"] },
+      { word: "기타", category: "악기", level: "objects", hint: "조롱박 모양의 통과 길쭉한 넥, 팽팽한 줄들!", keywords: ["기타", "guitar", "통기타"], qd: ["guitar"] },
+      { word: "드럼", category: "악기", level: "objects", hint: "원통형 북과 양옆에 교차된 두 개의 드럼 스틱!", keywords: ["드럼", "북", "drum"], qd: ["drums"] },
+      { word: "가위", category: "도구", level: "objects", hint: "가운데 축을 중심으로 X자로 교차된 날과 두 손잡이 구멍!", keywords: ["가위", "scissors"], qd: ["scissors"] },
+      { word: "선풍기", category: "가전", level: "objects", hint: "둥근 안전망 속에 회전하는 3장의 날개와 받침대!", keywords: ["선풍기", "fan"], qd: ["fan", "ceiling_fan"] },
+      { word: "스마트폰", category: "가전", level: "objects", hint: "모서리가 둥근 직사각형 화면과 상단 카메라 렌즈!", keywords: ["스마트폰", "휴대폰", "핸드폰", "phone", "smartphone"], qd: ["cell_phone"] },
+      { word: "텔레비전", category: "가전", level: "objects", hint: "큼직한 사각형 화면과 V자 안테나 또는 스탠드!", keywords: ["텔레비전", "TV", "티비", "television"], qd: ["television"] },
+      { word: "컴퓨터", category: "가전", level: "objects", hint: "모니터 화면과 아래 네모난 키보드 자판!", keywords: ["컴퓨터", "모니터", "computer", "pc"], qd: ["computer", "laptop"] },
+      { word: "열쇠", category: "사물", level: "easy", hint: "둥근 머리 고리와 길쭉한 자루 끝의 톱니 홈!", keywords: ["열쇠", "키", "key"], qd: ["key"] },
+      { word: "전등", category: "사물", level: "easy", hint: "둥근 전구 유리알과 아래쪽 나사산 소켓!", keywords: ["전구", "전등", "lightbulb", "lamp"], qd: ["light_bulb", "floor_lamp"] },
+      { word: "연필", category: "도구", level: "easy", hint: "길쭉한 육각 몸통과 뾰족하게 깎인 심, 지우개 끝!", keywords: ["연필", "pencil"], qd: ["pencil"] },
+      { word: "촛불", category: "사물", level: "easy", hint: "원통형 양초 기둥과 일렁이며 타오르는 물방울 불꽃!", keywords: ["촛불", "양초", "candle"], qd: ["candle"] },
+      { word: "다이아몬드", category: "사물", level: "easy", hint: "윗면은 평평하고 아랫면은 역삼각형으로 깎인 보석!", keywords: ["다이아몬드", "보석", "diamond", "gem"], qd: ["diamond"] },
+      { word: "칫솔", category: "도구", level: "easy", hint: "길쭉한 손잡이 머리에 오밀조밀 심겨진 칫솔모!", keywords: ["칫솔", "toothbrush"], qd: ["toothbrush"] },
+      { word: "신발", category: "패션", level: "easy", hint: "발목 입구와 바닥 창, 둥근 앞코가 돋보이는 신발!", keywords: ["신발", "운동화", "구두", "shoes", "sneakers"], qd: ["shoe"] },
+      { word: "축구공", category: "스포츠", level: "objects", hint: "둥근 원 안에 그려진 오각형과 육각형 가죽 무늬!", keywords: ["축구공", "soccer", "football"], qd: ["soccer_ball"] },
+      { word: "야구배트", category: "스포츠", level: "objects", hint: "손잡이는 가늘고 끝으로 갈수록 두꺼워지는 방망이!", keywords: ["야구배트", "야구방망이", "bat", "baseball"], qd: ["baseball_bat"] },
+      { word: "카메라", category: "사물", level: "objects", hint: "직사각형 바디 한가운데 볼록 솟은 둥근 렌즈와 셔터!", keywords: ["카메라", "camera"], qd: ["camera"] },
+      { word: "헤드폰", category: "사물", level: "objects", hint: "머리 위를 둥글게 잇는 헤드밴드와 양쪽 푹신한 이어컵!", keywords: ["헤드폰", "headphones", "헤드셋"], qd: ["headphones"] },
+      // 6. AI 페스타 추가 제시어 (Quick, Draw! 데이터셋에 있는 단어 위주)
+      { word: "펭귄", category: "동물", level: "animals", hint: "통통한 타원 몸통에 하얀 배, 짧은 날개와 발!", keywords: ["펭귄", "penguin"], qd: ["penguin"] },
+      { word: "돼지", category: "동물", level: "animals", hint: "동그란 얼굴 한가운데 콧구멍 두 개 뚫린 납작코!", keywords: ["돼지", "pig"], qd: ["pig"] },
+      { word: "곰", category: "동물", level: "animals", hint: "동그란 얼굴 위에 작고 둥근 귀 두 개!", keywords: ["곰", "bear"], qd: ["bear", "teddy-bear"] },
+      { word: "판다", category: "동물", level: "animals", hint: "둥근 얼굴에 까만 눈 주위 무늬와 까만 귀!", keywords: ["판다", "panda"], qd: ["panda"] },
+      { word: "고래", category: "생물", level: "animals", hint: "커다란 몸통 끝 갈라진 꼬리와 머리 위 물줄기!", keywords: ["고래", "whale"], qd: ["whale"] },
+      { word: "돌고래", category: "생물", level: "animals", hint: "매끈한 몸에 뾰족한 주둥이, 등지느러미 하나!", keywords: ["돌고래", "dolphin"], qd: ["dolphin"] },
+      { word: "거미", category: "생물", level: "animals", hint: "동그란 몸통 양옆으로 뻗은 다리 8개!", keywords: ["거미", "spider"], qd: ["spider"] },
+      { word: "벌", category: "생물", level: "animals", hint: "줄무늬 타원 몸통과 위로 붙은 동그란 날개 두 장!", keywords: ["벌", "꿀벌", "bee"], qd: ["bee"] },
+      { word: "얼룩말", category: "동물", level: "animals", hint: "네 다리 달린 말 몸통에 줄무늬를 쓱쓱!", keywords: ["얼룩말", "zebra"], qd: ["zebra"] },
+      { word: "낙타", category: "동물", level: "animals", hint: "등 위에 볼록 솟은 혹과 긴 목, 가는 다리!", keywords: ["낙타", "camel"], qd: ["camel"] },
+      { word: "부엉이", category: "생물", level: "animals", hint: "커다랗고 동그란 두 눈과 뾰족한 귀깃털!", keywords: ["부엉이", "올빼미", "owl"], qd: ["owl"] },
+      { word: "딸기", category: "음식", level: "easy", hint: "아래가 뾰족한 하트형 몸통에 콕콕 씨와 꼭지 잎!", keywords: ["딸기", "strawberry"], qd: ["strawberry"] },
+      { word: "당근", category: "음식", level: "easy", hint: "길쭉한 역삼각형 몸통 위에 삐죽 솟은 잎!", keywords: ["당근", "carrot"], qd: ["carrot"] },
+      { word: "버섯", category: "음식", level: "easy", hint: "반원 갓 아래에 두툼한 기둥 하나!", keywords: ["버섯", "mushroom"], qd: ["mushroom"] },
+      { word: "파인애플", category: "음식", level: "objects", hint: "격자무늬 타원 몸통 위에 뾰족뾰족 잎 왕관!", keywords: ["파인애플", "pineapple"], qd: ["pineapple"] },
+      { word: "핫도그", category: "음식", level: "objects", hint: "길쭉한 빵 사이에 쏙 들어간 소시지!", keywords: ["핫도그", "hot dog", "hotdog"], qd: ["hot_dog"] },
+      { word: "왕관", category: "사물", level: "easy", hint: "아래는 일자, 위로 뾰족뾰족 솟은 삼각 봉우리!", keywords: ["왕관", "crown"], qd: ["crown"] },
+      { word: "무지개", category: "자연", level: "easy", hint: "겹겹이 쌓인 반원 아치 여러 줄!", keywords: ["무지개", "rainbow"], qd: ["rainbow"] },
+      { word: "번개", category: "자연", level: "easy", hint: "위에서 아래로 지그재그 꺾인 번쩍 모양!", keywords: ["번개", "lightning"], qd: ["lightning"] },
+      { word: "눈송이", category: "자연", level: "easy", hint: "가운데에서 여섯 갈래로 뻗은 선과 작은 가지!", keywords: ["눈송이", "눈꽃", "snowflake"], qd: ["snowflake"] },
+      { word: "선인장", category: "자연", level: "easy", hint: "길쭉한 기둥 양옆으로 위로 꺾인 팔 두 개!", keywords: ["선인장", "cactus"], qd: ["cactus"] },
+      { word: "텐트", category: "사물", level: "easy", hint: "커다란 세모 모양에 가운데 갈라진 입구!", keywords: ["텐트", "tent"], qd: ["tent"] },
+      { word: "사다리", category: "도구", level: "easy", hint: "나란한 세로 기둥 두 개와 가로 칸 여러 개!", keywords: ["사다리", "ladder"], qd: ["ladder"] },
+      { word: "망치", category: "도구", level: "objects", hint: "긴 손잡이 위에 가로로 놓인 네모 머리!", keywords: ["망치", "hammer"], qd: ["hammer"] },
+      { word: "포크", category: "도구", level: "easy", hint: "긴 손잡이 끝에 갈라진 날카로운 살 서너 개!", keywords: ["포크", "fork"], qd: ["fork"] },
+      { word: "숟가락", category: "도구", level: "easy", hint: "길쭉한 손잡이 끝에 달걀형 오목한 머리!", keywords: ["숟가락", "스푼", "spoon"], qd: ["spoon"] },
+      { word: "버스", category: "탈것", level: "objects", hint: "긴 직사각형 몸통에 줄지어 있는 창문과 바퀴 두 개!", keywords: ["버스", "bus"], qd: ["bus", "school_bus"] },
+      { word: "트럭", category: "탈것", level: "objects", hint: "앞쪽 작은 운전석과 뒤쪽 커다란 짐칸 상자!", keywords: ["트럭", "truck"], qd: ["truck", "pickup_truck"] },
+      { word: "소방차", category: "탈것", level: "objects", hint: "긴 차체 위에 비스듬히 얹힌 사다리!", keywords: ["소방차", "firetruck", "fire truck"], qd: ["firetruck"] },
+      { word: "열기구", category: "탈것", level: "objects", hint: "커다란 둥근 풍선 아래 줄로 매단 작은 바구니!", keywords: ["열기구", "hot air balloon"], qd: ["hot_air_balloon"] },
+      { word: "잠수함", category: "탈것", level: "objects", hint: "길쭉한 타원 몸통 위에 솟은 망루와 잠망경!", keywords: ["잠수함", "submarine"], qd: ["submarine"] },
+      { word: "풍차", category: "건축", level: "objects", hint: "세모난 탑 꼭대기에 X자로 달린 큰 날개 네 장!", keywords: ["풍차", "windmill"], qd: ["windmill"] },
+      { word: "에펠탑", category: "건축", level: "objects", hint: "아래는 넓고 위로 갈수록 뾰족한 A자 철탑!", keywords: ["에펠탑", "eiffel"], qd: ["The_Eiffel_Tower"] },
+      { word: "등대", category: "건축", level: "objects", hint: "위로 좁아지는 기둥 꼭대기에서 퍼지는 불빛!", keywords: ["등대", "lighthouse"], qd: ["lighthouse"] },
+      { word: "성", category: "건축", level: "objects", hint: "울퉁불퉁 톱니 모양 성벽과 양쪽 높은 탑!", keywords: ["성", "castle"], qd: ["castle"] },
+      { word: "바이올린", category: "악기", level: "objects", hint: "잘록한 허리의 몸통과 긴 목, 옆에 활 하나!", keywords: ["바이올린", "violin"], qd: ["violin"] },
+      { word: "마이크", category: "사물", level: "objects", hint: "동그란 머리 아래로 길쭉한 손잡이!", keywords: ["마이크", "microphone"], qd: ["microphone"] },
+      { word: "양말", category: "패션", level: "easy", hint: "L자로 꺾인 긴 통과 둥근 발끝!", keywords: ["양말", "sock"], qd: ["sock"] },
+      { word: "티셔츠", category: "패션", level: "easy", hint: "네모난 몸통 양옆으로 짧게 뻗은 소매!", keywords: ["티셔츠", "t-shirt", "셔츠"], qd: ["t-shirt"] },
+      { word: "웃는 얼굴", category: "기호", level: "easy", hint: "큰 동그라미 안에 점 두 개와 활짝 웃는 입!", keywords: ["웃는", "스마일", "smiley", "얼굴"], qd: ["smiley_face"] }
     ];
 
     let gameState = {
@@ -618,7 +777,10 @@
       currentRound: 1,
       successCount: 0,
       roundResults: [],
-      usedWordsHistory: [] // 한 세션(5라운드) 동안 중복 출제 방지
+      usedWordsHistory: [], // 한 세션(5라운드) 동안 중복 출제 방지
+
+      // DoodleNet 입력용 획 좌표 기록: [{ erase, width, pts: [[x, y], ...] }]
+      strokes: []
     };
 
     const canvas = document.getElementById("sketchCanvas");
@@ -683,6 +845,12 @@
       const pos = getPointerPos(e);
       lastX = pos.x;
       lastY = pos.y;
+      gameState.strokes.push({
+        erase: isEraser,
+        width: isEraser ? currentPenSize * 2.5 : currentPenSize,
+        pts: [[pos.x, pos.y]]
+      });
+      if (isEraser) return;
       gameState.currentStrokeCount++;
       const strokeText = document.getElementById("strokeCountText");
       if (strokeText) strokeText.textContent = `선 획수: ${gameState.currentStrokeCount}개`;
@@ -699,6 +867,9 @@
       ctx.strokeStyle = isEraser ? "#ffffff" : "#1e293b";
       ctx.lineWidth = isEraser ? currentPenSize * 2.5 : currentPenSize;
       ctx.stroke();
+
+      const stroke = gameState.strokes[gameState.strokes.length - 1];
+      if (stroke) stroke.pts.push([pos.x, pos.y]);
 
       lastX = pos.x;
       lastY = pos.y;
@@ -759,8 +930,10 @@
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, rect.width, rect.height);
       gameState.currentStrokeCount = 0;
+      gameState.strokes = [];
       const strokeText = document.getElementById("strokeCountText");
       if (strokeText) strokeText.textContent = `선 획수: 0개`;
+      document.getElementById("aiEyeMini")?.classList.add("hidden");
     }
 
     if (clearCanvasBtn) clearCanvasBtn.addEventListener("click", clearCanvasArea);
@@ -834,6 +1007,11 @@
       const remainText = document.getElementById("remainingRoundsText");
       if (remainText) remainText.textContent = `${remain}회`;
 
+      const missionTotal = document.getElementById("missionTotalText");
+      if (missionTotal) missionTotal.textContent = gameState.totalRounds;
+      const missionPass = document.getElementById("missionPassText");
+      if (missionPass) missionPass.textContent = gameState.passTarget;
+
       const roundBadge = document.getElementById("currentRoundBadge");
       if (roundBadge) roundBadge.textContent = `ROUND ${gameState.currentRound} / ${gameState.totalRounds}`;
       
@@ -851,6 +1029,12 @@
       if (categoryFilter !== "all") {
         pool = WORD_DATABASE.filter(item => item.level === categoryFilter || item.category === categoryFilter);
         if (pool.length === 0) pool = WORD_DATABASE;
+      }
+
+      // DoodleNet은 Quick, Draw! 345종만 알기 때문에 그 안에 있는 제시어만 출제
+      if (gameState.apiMode === "doodlenet") {
+        const known = pool.filter(item => item.qd && item.qd.length > 0);
+        if (known.length > 0) pool = known;
       }
 
       // 5라운드 세션 동안 이미 사용한 단어는 제외하여 항상 새로운 문제가 나오도록 처리
@@ -967,7 +1151,7 @@
         }
 
         if (gameState.timeLeft <= 0) {
-          endRound(false, "제한 시간 15초가 지났습니다!");
+          endRound(false, `제한 시간 ${gameState.maxTime}초가 지났습니다!`);
         }
       }, 100);
 
@@ -1001,18 +1185,33 @@
       const base64Data = canvas.toDataURL("image/png").split(",")[1];
       let aiFailed = false;
 
+      // 어떤 모드든 AI가 실제로 받는 28×28 그림을 캔버스 구석에 보여줌
+      updateAiEyeMini();
+
       try {
         if (gameState.apiMode === "gemini") {
           await callGeminiVision(base64Data);
+        } else if (gameState.apiMode === "doodlenet") {
+          await predictWithDoodleNet();
         } else {
           simulateVisionAi();
         }
       } catch (err) {
-        console.warn("Vision API 이슈로 스마트 시뮬레이션으로 자동 대체:", err);
-        simulateVisionAi();
         aiFailed = true;
+        // Gemini 실패 시 → 브라우저 내장 DoodleNet → 그래도 안 되면 시뮬레이션 순으로 대체
+        let fallbackLabel = "시뮬레이션";
+        let usedDoodle = false;
+        if (gameState.apiMode !== "doodlenet" && doodleNet.model && hasDoodleLabel(gameState.currentWordObj)) {
+          try {
+            await predictWithDoodleNet();
+            usedDoodle = true;
+            fallbackLabel = "DoodleNet";
+          } catch (e) {}
+        }
+        console.warn(`AI 판독 오류로 ${fallbackLabel}(으)로 자동 대체:`, err);
+        if (!usedDoodle) simulateVisionAi();
         if (scanIndicator) {
-          const msg = "AI 연결 오류 · 시뮬레이션";
+          const msg = `AI 연결 오류 · ${fallbackLabel}`;
           scanIndicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> ${msg}`;
         }
       } finally {
@@ -1116,6 +1315,257 @@
       handleAiPredictionResult(parsed);
     }
 
+    // ===== DoodleNet: 브라우저 안에서 바로 도는 Quick, Draw! CNN (TensorFlow.js) =====
+    // 모델 파일은 저장소의 model/doodlenet/ 에 있고, 못 불러오면 ml5 공식 CDN에서 받습니다.
+    const DOODLENET_URLS = [
+      "model/doodlenet/model.json",
+      "https://cdn.jsdelivr.net/gh/ml5js/ml5-data-and-models/models/doodlenet/model.json"
+    ];
+    const AI_INPUT_SIZE = 28;   // Quick, Draw! 데이터셋과 같은 28×28 흑백
+    const AI_INPUT_BOX = 22;    // 그림을 가운데 22×22 안에 맞춰 넣기 (테두리 여백)
+    const AI_INK_WIDTH = 1.6;   // 28×28 기준 선 굵기 (원본 데이터와 비슷하게)
+    const doodleNet = { model: null, featureModel: null, labels: [], loading: null };
+
+    function hasDoodleLabel(wordObj) {
+      return !!(wordObj && wordObj.qd && wordObj.qd.length > 0);
+    }
+
+    function setDoodleStatus(text, colorClass) {
+      const el = document.getElementById("doodleNetStatus");
+      if (!el) return;
+      el.textContent = text;
+      el.className = `text-[11px] mt-1 ${colorClass}`;
+    }
+
+    function loadDoodleNet() {
+      if (doodleNet.model) return Promise.resolve(doodleNet.model);
+      if (doodleNet.loading) return doodleNet.loading;
+
+      doodleNet.loading = (async () => {
+        if (!window.tf) throw new Error("TensorFlow.js를 불러오지 못했습니다");
+        let lastErr;
+        for (const url of DOODLENET_URLS) {
+          try {
+            const model = await tf.loadLayersModel(url);
+            const res = await fetch(url.replace(/model\.json$/, "class_names.txt"));
+            if (!res.ok) throw new Error(`class_names ${res.status}`);
+            const labels = (await res.text()).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            doodleNet.model = model;
+            doodleNet.labels = labels;
+            // 1층(짧은 선·방향)과 4층(모양 조합)의 특징 지도를 꺼내 보는 보조 모델
+            doodleNet.featureModel = tf.model({
+              inputs: model.inputs,
+              outputs: [model.getLayer("conv2d").output, model.getLayer("conv2d_3").output]
+            });
+            setDoodleStatus(`✅ DoodleNet 준비 완료 (${labels.length}종 인식 · 인터넷 없이 판독)`, "text-emerald-600");
+            return model;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr;
+      })();
+
+      doodleNet.loading.catch(err => {
+        console.warn("DoodleNet 로드 실패:", err);
+        doodleNet.loading = null;
+        setDoodleStatus("⚠️ DoodleNet을 불러오지 못했습니다. 인터넷 연결을 확인하세요.", "text-rose-600");
+      });
+      return doodleNet.loading;
+    }
+
+    // 기록해 둔 획 좌표를 Quick, Draw! 방식처럼 28×28에 가운데 정렬해 다시 그림 (검은 바탕 + 흰 선)
+    const aiInputCanvas = document.createElement("canvas");
+    aiInputCanvas.width = AI_INPUT_SIZE;
+    aiInputCanvas.height = AI_INPUT_SIZE;
+
+    function renderStrokesTo28() {
+      const inkPts = gameState.strokes.filter(s => !s.erase).flatMap(s => s.pts);
+      if (inkPts.length === 0) return null;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      inkPts.forEach(([x, y]) => {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      });
+      const scale = AI_INPUT_BOX / Math.max(maxX - minX, maxY - minY, 1);
+      const offX = (AI_INPUT_SIZE - (maxX - minX) * scale) / 2 - minX * scale;
+      const offY = (AI_INPUT_SIZE - (maxY - minY) * scale) / 2 - minY * scale;
+
+      const c = aiInputCanvas.getContext("2d");
+      c.fillStyle = "#000";
+      c.fillRect(0, 0, AI_INPUT_SIZE, AI_INPUT_SIZE);
+      c.lineCap = "round";
+      c.lineJoin = "round";
+
+      gameState.strokes.forEach(stroke => {
+        const color = stroke.erase ? "#000" : "#fff";
+        const width = stroke.erase ? Math.max(1, stroke.width * scale) : AI_INK_WIDTH;
+        const pts = stroke.pts.map(([x, y]) => [x * scale + offX, y * scale + offY]);
+        if (pts.length === 1) {
+          c.fillStyle = color;
+          c.beginPath();
+          c.arc(pts[0][0], pts[0][1], width / 2, 0, Math.PI * 2);
+          c.fill();
+          return;
+        }
+        c.strokeStyle = color;
+        c.lineWidth = width;
+        c.beginPath();
+        c.moveTo(pts[0][0], pts[0][1]);
+        pts.slice(1).forEach(([x, y]) => c.lineTo(x, y));
+        c.stroke();
+      });
+      return aiInputCanvas;
+    }
+
+    function makeAiInputTensor() {
+      const src = renderStrokesTo28();
+      if (!src) return null;
+      return tf.tidy(() => tf.browser.fromPixels(src, 1).toFloat().div(255).reshape([1, AI_INPUT_SIZE, AI_INPUT_SIZE, 1]));
+    }
+
+    function updateAiEyeMini() {
+      const src = renderStrokesTo28();
+      const mini = document.getElementById("aiEyeMini");
+      const miniCanvas = document.getElementById("aiEyeMiniCanvas");
+      if (!src || !mini || !miniCanvas) return;
+      miniCanvas.getContext("2d").drawImage(src, 0, 0);
+      mini.classList.remove("hidden");
+    }
+
+    // 받침 유무에 따라 "~이에요 / ~예요"
+    function withCopula(word) {
+      const code = word.charCodeAt(word.length - 1);
+      const hasBatchim = code >= 0xAC00 && code <= 0xD7A3 && (code - 0xAC00) % 28 !== 0;
+      return word + (hasBatchim ? "이에요" : "예요");
+    }
+
+    async function predictWithDoodleNet() {
+      await loadDoodleNet();
+      const input = makeAiInputTensor();
+      if (!input) return;
+      const probs = tf.tidy(() => doodleNet.model.predict(input).dataSync());
+      input.dispose();
+
+      const top = Array.from(probs.keys()).sort((a, b) => probs[b] - probs[a]).slice(0, 3);
+      const predictions = top.map(i => {
+        const label = doodleNet.labels[i];
+        return {
+          name: (window.DOODLE_LABELS_KO && window.DOODLE_LABELS_KO[label]) || label.replace(/_/g, " "),
+          label,
+          confidence: Math.round(probs[i] * 100)
+        };
+      });
+
+      const say = name => name.replace(/\(.*\)/, "");
+      const [p1, p2] = predictions;
+      let spokenGuess;
+      if (p1.confidence >= 60) spokenGuess = `알겠다! ${withCopula(say(p1.name))}!`;
+      else if (p1.confidence >= 30) spokenGuess = `음... ${say(p1.name)}? 아니면 ${say(p2.name)}인가요?`;
+      else spokenGuess = `잘 모르겠어요... 혹시 ${say(p1.name)}인가요?`;
+
+      handleAiPredictionResult({ topPredictions: predictions, spokenGuess });
+    }
+
+    // 특징 지도 한 장을 히트맵으로 그림 (밝을수록 그 필터가 강하게 반응한 곳)
+    function drawFeatureMap(targetCanvas, data, size, channels, ch) {
+      const c = targetCanvas.getContext("2d");
+      const img = c.createImageData(size, size);
+      let max = 1e-6;
+      for (let i = 0; i < size * size; i++) max = Math.max(max, data[i * channels + ch]);
+      for (let i = 0; i < size * size; i++) {
+        const v = data[i * channels + ch] / max;
+        img.data[i * 4] = Math.round(255 * Math.min(1, Math.max(0, v * 2 - 1)));
+        img.data[i * 4 + 1] = Math.round(255 * Math.min(1, v * 1.2));
+        img.data[i * 4 + 2] = Math.round(255 * Math.min(1, 0.25 + v * 1.5));
+        img.data[i * 4 + 3] = 255;
+      }
+      c.putImageData(img, 0, 0);
+    }
+
+    // 배경 전체가 아니라 "특정 부분에만" 강하게 반응한 필터 n개 고르기 (반응의 표준편차 기준)
+    function strongestChannels(data, size, channels, n) {
+      const count = size * size;
+      const sums = new Array(channels).fill(0);
+      const sqSums = new Array(channels).fill(0);
+      for (let i = 0; i < count; i++) {
+        for (let ch = 0; ch < channels; ch++) {
+          const v = data[i * channels + ch];
+          sums[ch] += v;
+          sqSums[ch] += v * v;
+        }
+      }
+      return sums
+        .map((sum, ch) => [Math.sqrt(Math.max(0, sqSums[ch] / count - (sum / count) ** 2)), ch])
+        .sort((a, b) => b[0] - a[0])
+        .slice(0, n)
+        .map(x => x[1]);
+    }
+
+    // 결과 창·원리 창에 "AI의 눈" 패널 그리기. 그린 그림이 없으면 false
+    function renderAiEyePanel(container, title) {
+      if (!container) return false;
+      const src = renderStrokesTo28();
+      if (!src) return false;
+
+      const mapCanvas = (size, cls) => `<canvas width="${size}" height="${size}" class="${cls} pixelated w-full aspect-square rounded border border-slate-200 bg-black"></canvas>`;
+      container.innerHTML = `
+        <div class="text-[11px] font-extrabold text-slate-700 mb-1.5 text-left">🔬 ${title}</div>
+        <div class="flex items-start gap-2 text-left">
+          <div class="text-center shrink-0 w-16">
+            <canvas width="28" height="28" class="ai-eye-input pixelated w-16 h-16 rounded-md border border-slate-300 bg-black"></canvas>
+            <div class="text-[9px] font-bold text-slate-600 mt-0.5 leading-tight">AI 입력<br>28×28</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[9px] font-bold text-indigo-700 mb-0.5">1층 필터 · 짧은 선과 방향</div>
+            <div class="grid grid-cols-4 gap-1">${[0, 1, 2, 3].map(() => mapCanvas(28, "ai-eye-l1")).join("")}</div>
+            <div class="text-[9px] font-bold text-purple-700 mt-1 mb-0.5">4층 필터 · 모양 조합</div>
+            <div class="grid grid-cols-4 gap-1">${[0, 1, 2, 3].map(() => mapCanvas(14, "ai-eye-l4")).join("")}</div>
+          </div>
+        </div>
+        <p class="ai-eye-note text-[10px] text-slate-500 mt-1.5 text-left leading-snug">
+          밝게 빛나는 곳 = 그 필터가 "내가 찾는 특징이 여기 있어!"라고 반응한 부분이에요.
+        </p>`;
+      container.querySelector(".ai-eye-input").getContext("2d").drawImage(src, 0, 0);
+
+      if (!doodleNet.featureModel) {
+        container.querySelector(".ai-eye-note").textContent = "DoodleNet 모델을 불러오는 중이라 특징 지도는 아직 표시할 수 없어요.";
+        return true;
+      }
+
+      const [l1, l4] = tf.tidy(() => {
+        const input = tf.browser.fromPixels(src, 1).toFloat().div(255).reshape([1, 28, 28, 1]);
+        return doodleNet.featureModel.predict(input).map(t => t.dataSync());
+      });
+      const l1Canvases = container.querySelectorAll(".ai-eye-l1");
+      strongestChannels(l1, 28, 16, 4).forEach((ch, i) => drawFeatureMap(l1Canvases[i], l1, 28, 16, ch));
+      const l4Canvases = container.querySelectorAll(".ai-eye-l4");
+      strongestChannels(l4, 14, 32, 4).forEach((ch, i) => drawFeatureMap(l4Canvases[i], l4, 14, 32, ch));
+      return true;
+    }
+
+    // 정답 축하 꽃가루
+    function launchConfetti(count = 50) {
+      const colors = ["#6366f1", "#a855f7", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"];
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement("div");
+        piece.className = "confetti-piece";
+        const size = 6 + Math.random() * 8;
+        piece.style.left = `${Math.random() * 100}vw`;
+        piece.style.width = `${size}px`;
+        piece.style.height = `${size * (0.4 + Math.random() * 0.6)}px`;
+        piece.style.background = colors[i % colors.length];
+        piece.style.borderRadius = Math.random() > 0.5 ? "9999px" : "2px";
+        piece.style.setProperty("--dx", `${(Math.random() - 0.5) * 30}vw`);
+        piece.style.setProperty("--rot", `${(Math.random() - 0.5) * 1440}deg`);
+        piece.style.setProperty("--dur", `${1.6 + Math.random() * 1.4}s`);
+        piece.style.animationDelay = `${Math.random() * 0.3}s`;
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 3500);
+      }
+    }
+
     function simulateVisionAi() {
       const target = gameState.currentWordObj;
       const strokes = gameState.currentStrokeCount;
@@ -1166,11 +1616,12 @@
       const topPick = predictions[0];
       const target = gameState.currentWordObj;
 
-      const isMatch = topPick && (
-        topPick.name.includes(target.word) || 
+      // DoodleNet 결과는 영어 라벨로 정확히 비교 (예: "배(과일)"이 "배"로 오인정되지 않도록)
+      const isMatch = topPick && (topPick.label ? (target.qd || []).includes(topPick.label) : (
+        topPick.name.includes(target.word) ||
         target.word.includes(topPick.name) ||
         (target.keywords && target.keywords.some(k => topPick.name.toLowerCase().includes(k.toLowerCase())))
-      );
+      ));
 
       if (isMatch && (topPick.confidence >= 48 || gameState.currentStrokeCount >= 3)) {
         endRound(true, `AI가 ${topPick.confidence}% 확신으로 정답을 맞혔습니다!`);
@@ -1255,7 +1706,7 @@
       if (isFinalRound) {
         if (passedMission) {
           if (modalTitle) modalTitle.textContent = "🏆 부스 미션 최종 대성공!";
-          if (modalSubtitle) modalSubtitle.textContent = `축하합니다! 5문제 중 총 ${gameState.successCount}문제를 맞춰 합격 기준(${gameState.passTarget}회)을 돌파했습니다!`;
+          if (modalSubtitle) modalSubtitle.textContent = `축하합니다! ${gameState.totalRounds}문제 중 총 ${gameState.successCount}문제를 맞춰 합격 기준(${gameState.passTarget}회)을 돌파했습니다!`;
           if (modalIcon) modalIcon.className = "fa-solid fa-stamp";
           if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
           
@@ -1294,7 +1745,7 @@
         }
         
         if (stampBadge) stampBadge.className = "w-14 h-14 rounded-full border-2 border-dashed border-slate-300 text-slate-400 flex flex-col items-center justify-center font-bold opacity-40 grayscale";
-        if (stampStatusText) stampStatusText.textContent = `진행 중 (${gameState.currentRound}/5)`;
+        if (stampStatusText) stampStatusText.textContent = `진행 중 (${gameState.currentRound}/${gameState.totalRounds})`;
 
         if (isSuccess) {
           if (modalTitle) modalTitle.textContent = `R${gameState.currentRound} 텔레파시 성공! 🎉`;
@@ -1305,7 +1756,7 @@
           speakAI(`정답입니다! 다음 라운드로 이동해볼까요?`);
         } else {
           if (modalTitle) modalTitle.textContent = `R${gameState.currentRound} 시간 초과 ⏰`;
-          if (modalSubtitle) modalSubtitle.textContent = reason || `15초가 지났습니다. 정답은 [${gameState.currentWordObj.word}]이었습니다.`;
+          if (modalSubtitle) modalSubtitle.textContent = reason || `${gameState.maxTime}초가 지났습니다. 정답은 [${gameState.currentWordObj.word}]이었습니다.`;
           if (modalIcon) modalIcon.className = "fa-solid fa-clock";
           if (modalIconContainer) modalIconContainer.className = "w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 text-amber-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-md";
           if (modalAiComment) modalAiComment.textContent = `🤖 AI 코멘트: "다음 라운드에서는 더 과감하고 단순한 선으로 그려보세요!"`;
@@ -1318,8 +1769,147 @@
         }
       }
 
+      // AI의 눈: 이번 라운드 그림을 CNN이 어떻게 봤는지 보여주기
+      const modalAiEye = document.getElementById("modalAiEye");
+      if (modalAiEye) {
+        const shown = renderAiEyePanel(modalAiEye, "AI의 눈으로 본 이번 그림");
+        modalAiEye.classList.toggle("hidden", !shown);
+      }
+
+      // 마지막 라운드가 끝나면 명예의 전당 등록 칸 열기
+      const leaderboardEntry = document.getElementById("leaderboardEntry");
+      if (leaderboardEntry) {
+        leaderboardEntry.classList.toggle("hidden", !isFinalRound);
+        if (isFinalRound) resetLeaderboardEntry();
+      }
+
+      if (isSuccess) launchConfetti(isFinalRound && passedMission ? 120 : 50);
+      else if (isFinalRound && passedMission) launchConfetti(120);
+
       if (modal) modal.classList.remove("hidden");
     }
+
+    // ===== 명예의 전당 (부스 기기의 브라우저에만 저장) =====
+    const LEADERBOARD_STORAGE = "sketchTelepathy.leaderboard";
+    let lastSavedRecordId = null;
+
+    function loadLeaderboard() {
+      try {
+        const list = JSON.parse(localStorage.getItem(LEADERBOARD_STORAGE) || "[]");
+        return Array.isArray(list) ? list : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveLeaderboard(list) {
+      try { localStorage.setItem(LEADERBOARD_STORAGE, JSON.stringify(list)); } catch (e) {}
+    }
+
+    function sortLeaderboard(list) {
+      return list.sort((a, b) => (b.score / b.total) - (a.score / a.total) || b.score - a.score || a.time - b.time);
+    }
+
+    function renderLeaderboard() {
+      const container = document.getElementById("leaderboardList");
+      if (!container) return;
+      container.innerHTML = "";
+      const list = sortLeaderboard(loadLeaderboard()).slice(0, 10);
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="text-center text-xs text-slate-500 py-8">아직 기록이 없어요.<br>첫 번째 주인공이 되어보세요! ✨</div>`;
+        return;
+      }
+
+      const medals = ["🥇", "🥈", "🥉"];
+      list.forEach((rec, i) => {
+        const row = document.createElement("div");
+        const isMine = rec.id === lastSavedRecordId;
+        row.className = `flex items-center gap-2 px-3 py-2 rounded-xl border ${
+          isMine ? "bg-pink-50 border-pink-300 ring-2 ring-pink-200" : i < 3 ? "bg-amber-50/60 border-amber-200" : "bg-slate-50 border-slate-200"
+        }`;
+
+        const rank = document.createElement("span");
+        rank.className = "w-7 text-center font-black text-slate-500 shrink-0";
+        rank.textContent = medals[i] || `${i + 1}`;
+
+        const name = document.createElement("span");
+        name.className = "flex-1 min-w-0 truncate font-bold text-slate-800";
+        name.textContent = rec.name;
+
+        const score = document.createElement("span");
+        score.className = "text-xs font-extrabold text-emerald-600 shrink-0";
+        score.textContent = `${rec.score}/${rec.total} 정답`;
+
+        const time = document.createElement("span");
+        time.className = "text-[11px] font-mono text-slate-500 w-14 text-right shrink-0";
+        time.textContent = `${rec.time.toFixed(1)}초`;
+
+        row.append(rank, name, score, time);
+        container.appendChild(row);
+      });
+    }
+
+    function resetLeaderboardEntry() {
+      const input = document.getElementById("leaderboardNameInput");
+      const btn = document.getElementById("leaderboardSaveBtn");
+      const status = document.getElementById("leaderboardEntryStatus");
+      if (input) { input.value = ""; input.disabled = false; }
+      if (btn) { btn.textContent = "기록 저장"; btn.dataset.saved = ""; }
+      if (status) status.textContent = `${gameState.successCount}/${gameState.totalRounds} 정답 기록을 이 기기의 순위표에 남길 수 있어요.`;
+    }
+
+    function saveLeaderboardEntry() {
+      const input = document.getElementById("leaderboardNameInput");
+      const btn = document.getElementById("leaderboardSaveBtn");
+      const status = document.getElementById("leaderboardEntryStatus");
+
+      // 이미 저장했다면 버튼은 '순위 보기'
+      if (btn && btn.dataset.saved) {
+        openLeaderboard();
+        return;
+      }
+
+      const name = (input?.value || "").trim().slice(0, 10) || "익명의 도전자";
+      const totalTime = gameState.roundResults.reduce((sum, r) => sum + parseFloat(r.time || 0), 0);
+      const record = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name,
+        score: gameState.successCount,
+        total: gameState.totalRounds,
+        time: Math.round(totalTime * 10) / 10,
+        date: new Date().toISOString()
+      };
+
+      const list = sortLeaderboard([...loadLeaderboard(), record]).slice(0, 100);
+      saveLeaderboard(list);
+      lastSavedRecordId = record.id;
+
+      const rank = list.findIndex(r => r.id === record.id) + 1;
+      if (status) status.textContent = rank > 0 ? `🎉 ${name} 님, 현재 ${rank}위로 등록되었어요!` : "기록이 저장되었어요.";
+      if (input) input.disabled = true;
+      if (btn) { btn.textContent = "순위 보기"; btn.dataset.saved = "1"; }
+    }
+
+    function openLeaderboard() {
+      renderLeaderboard();
+      document.getElementById("leaderboardModal")?.classList.remove("hidden");
+    }
+
+    document.getElementById("leaderboardSaveBtn")?.addEventListener("click", saveLeaderboardEntry);
+    document.getElementById("leaderboardNameInput")?.addEventListener("keydown", e => {
+      if (e.key === "Enter") saveLeaderboardEntry();
+    });
+    document.getElementById("leaderboardBtn")?.addEventListener("click", openLeaderboard);
+    document.getElementById("closeLeaderboardBtn")?.addEventListener("click", () => {
+      document.getElementById("leaderboardModal")?.classList.add("hidden");
+    });
+    document.getElementById("clearLeaderboardBtn")?.addEventListener("click", () => {
+      if (!confirm("명예의 전당 기록을 모두 지울까요? 되돌릴 수 없습니다.")) return;
+      saveLeaderboard([]);
+      lastSavedRecordId = null;
+      renderLeaderboard();
+    });
 
     const resultModal = document.getElementById("resultModal");
     const modalActionBtn = document.getElementById("modalActionBtn");
@@ -1397,7 +1987,15 @@
     const confirmConceptBtn = document.getElementById("confirmConceptBtn");
 
     if (aiConceptBtn && conceptModal) {
-      aiConceptBtn.addEventListener("click", () => conceptModal.classList.remove("hidden"));
+      const conceptAiEye = document.getElementById("conceptAiEye");
+      const conceptAiEyeDefault = conceptAiEye ? conceptAiEye.innerHTML : "";
+      aiConceptBtn.addEventListener("click", () => {
+        // 지금 캔버스의 그림으로 실제 특징 지도를 보여주기
+        if (conceptAiEye && !renderAiEyePanel(conceptAiEye, "지금 캔버스 그림의 특징 지도")) {
+          conceptAiEye.innerHTML = conceptAiEyeDefault;
+        }
+        conceptModal.classList.remove("hidden");
+      });
     }
     if (closeConceptBtn && conceptModal) {
       closeConceptBtn.addEventListener("click", () => conceptModal.classList.add("hidden"));
@@ -1437,6 +2035,7 @@
       saveSettingsBtn.addEventListener("click", () => {
         const modeRadio = document.querySelector('input[name="apiMode"]:checked');
         if (modeRadio) gameState.apiMode = modeRadio.value;
+        if (gameState.apiMode === "doodlenet") loadDoodleNet().catch(() => {});
 
         const keyInput = document.getElementById("geminiApiKeyInput");
         if (keyInput) saveApiKey(keyInput.value.trim());
@@ -1453,6 +2052,9 @@
 
     window.addEventListener("DOMContentLoaded", () => {
       resizeCanvas();
+      // 특징 지도 표시와 Gemini 장애 대비용으로 DoodleNet을 미리 받아 둠 (약 2MB)
+      setDoodleStatus("DoodleNet 모델 불러오는 중...", "text-slate-500");
+      loadDoodleNet().catch(() => {});
       const keyInput = document.getElementById("geminiApiKeyInput");
       if (keyInput) keyInput.value = loadApiKey();
       renderRoundSlots();
